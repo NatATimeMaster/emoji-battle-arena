@@ -562,6 +562,7 @@
 
   <!-- Character Modules -->
   <script src="demonlord.js"></script>
+  <script src="terestro.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -673,6 +674,10 @@
         if (this.type === "fire") {
           return this.handleFireUpdate();
         }
+        
+        if (this.type === "star") {
+          return this.handleStarUpdate();
+        }
 
         // Default projectile behavior
         return true;
@@ -708,6 +713,17 @@
         return true;
       }
 
+      handleStarUpdate() {
+        // Check wall collision for star projectiles - stars stop when hitting walls
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          return false; // Star disappears when hitting wall
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -718,6 +734,14 @@
         if (this.type === 'fire') {
           ctx.shadowColor = "#ff4444";
           ctx.shadowBlur = 10;
+        } else if (this.type === 'star') {
+          if (this.data.enhanced) {
+            ctx.shadowColor = "#ffd700";
+            ctx.shadowBlur = 15;
+          } else {
+            ctx.shadowColor = "#ffffff";
+            ctx.shadowBlur = 8;
+          }
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -770,6 +794,9 @@
         // Initialize character-specific abilities using modules
         if (window.DemonlordModule) {
           DemonlordModule.initializeAbilities(this);
+        }
+        if (window.TerestroModule) {
+          TerestroModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -832,6 +859,9 @@
         if (window.DemonlordModule) {
           DemonlordModule.handleAbilities(this);
         }
+        if (window.TerestroModule) {
+          TerestroModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -876,6 +906,9 @@
         // Handle character-specific death effects
         if (window.DemonlordModule) {
           DemonlordModule.handleCharacterDeath(this);
+        }
+        if (window.TerestroModule) {
+          TerestroModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1150,6 +1183,18 @@
       // Handle fire projectiles
       if (projectile.type === "fire" && window.DemonlordModule) {
         DemonlordModule.handleFireHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Handle star projectiles
+      if (projectile.type === "star" && window.TerestroModule) {
+        TerestroModule.handleStarHit(projectile, character);
         
         // Remove the projectile after hit
         const index = projectiles.indexOf(projectile);
