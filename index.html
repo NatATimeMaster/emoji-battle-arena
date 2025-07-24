@@ -563,6 +563,7 @@
   <!-- Character Modules -->
   <script src="demonlord.js"></script>
   <script src="terestro.js"></script>
+  <script src="gamemaster.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -678,6 +679,10 @@
         if (this.type === "star") {
           return this.handleStarUpdate();
         }
+        
+        if (this.type === "coin" || this.type === "bank") {
+          return this.handleCoinUpdate();
+        }
 
         // Default projectile behavior
         return true;
@@ -724,6 +729,44 @@
         return true;
       }
 
+      handleCoinUpdate() {
+        // Banks don't move
+        if (this.type === "bank") {
+          this.age++;
+          return this.age <= this.lifetime;
+        }
+        
+        // Handle coin wall bouncing
+        const margin = this.size;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.GamemasterModule) {
+          return GamemasterModule.handleCoinWallBounce(this);
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -742,6 +785,15 @@
             ctx.shadowColor = "#ffffff";
             ctx.shadowBlur = 8;
           }
+        } else if (this.type === 'coin') {
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 8;
+        } else if (this.type === 'bank') {
+          ctx.shadowColor = "#ffff00";
+          ctx.shadowBlur = 12;
+          // Add pulsing effect for banks
+          const pulse = Math.sin(this.age * 0.1) * 0.2 + 1;
+          ctx.globalAlpha = pulse;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -797,6 +849,9 @@
         }
         if (window.TerestroModule) {
           TerestroModule.initializeAbilities(this);
+        }
+        if (window.GamemasterModule) {
+          GamemasterModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -862,6 +917,9 @@
         if (window.TerestroModule) {
           TerestroModule.handleAbilities(this);
         }
+        if (window.GamemasterModule) {
+          GamemasterModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -909,6 +967,9 @@
         }
         if (window.TerestroModule) {
           TerestroModule.handleCharacterDeath(this);
+        }
+        if (window.GamemasterModule) {
+          GamemasterModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1202,6 +1263,24 @@
           projectiles.splice(index, 1);
         }
         return;
+      }
+      
+      // Handle coin projectiles
+      if (projectile.type === "coin" && window.GamemasterModule) {
+        GamemasterModule.handleCoinHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Handle bank projectiles
+      if (projectile.type === "bank" && window.GamemasterModule) {
+        GamemasterModule.handleBankHit(projectile, character);
+        return; // Banks are removed within the handler if collected
       }
       
       // Default projectile hit
