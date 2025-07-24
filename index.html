@@ -565,6 +565,7 @@
   <script src="terestro.js"></script>
   <script src="gamemaster.js"></script>
   <script src="deathblow.js"></script>
+  <script src="mimic.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -687,6 +688,10 @@
         
         if (this.type === "dangerskull") {
           return this.handleDangerskullUpdate();
+        }
+        
+        if (this.type === "redball" || this.type === "balloon") {
+          return this.handleMimicProjectileUpdate();
         }
 
         // Default projectile behavior
@@ -814,6 +819,51 @@
         return true;
       }
 
+      handleMimicProjectileUpdate() {
+        if (this.type === "redball") {
+          // Handle wall bouncing for red ball
+          const margin = this.size;
+          let hitWall = false;
+
+          if (this.x <= margin) {
+            this.x = margin;
+            this.vx *= -1;
+            hitWall = true;
+          } else if (this.x >= canvas.width - margin) {
+            this.x = canvas.width - margin;
+            this.vx *= -1;
+            hitWall = true;
+          }
+
+          if (this.y <= margin) {
+            this.y = margin;
+            this.vy *= -1;
+            hitWall = true;
+          } else if (this.y >= canvas.height - margin) {
+            this.y = canvas.height - margin;
+            this.vy *= -1;
+            hitWall = true;
+          }
+
+          if (hitWall && window.MimicModule) {
+            return MimicModule.handleRedBallBounce(this);
+          }
+
+          return true;
+        } else if (this.type === "balloon") {
+          // Check wall collision for balloons - they pop
+          const margin = this.size;
+          if (this.x <= margin || this.x >= canvas.width - margin ||
+              this.y <= margin || this.y >= canvas.height - margin) {
+            return window.MimicModule ? MimicModule.handleBalloonWallHit(this) : false;
+          }
+
+          return true;
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -847,6 +897,12 @@
           // Add pulsing effect for Dangerskulls
           const pulse = Math.sin(this.age * 0.15) * 0.1 + 0.9;
           ctx.globalAlpha = pulse;
+        } else if (this.type === 'redball') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 8;
+        } else if (this.type === 'balloon') {
+          ctx.shadowColor = "#ff69b4";
+          ctx.shadowBlur = 6;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -908,6 +964,9 @@
         }
         if (window.DeathblowModule) {
           DeathblowModule.initializeAbilities(this);
+        }
+        if (window.MimicModule) {
+          MimicModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -982,6 +1041,9 @@
         if (window.DeathblowModule) {
           DeathblowModule.handleAbilities(this);
         }
+        if (window.MimicModule) {
+          MimicModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1035,6 +1097,9 @@
         }
         if (window.DeathblowModule) {
           DeathblowModule.handleCharacterDeath(this);
+        }
+        if (window.MimicModule) {
+          MimicModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1306,6 +1371,11 @@
       if (character.isDead || character.invulnerable) return;
       if (character === projectile.owner && !projectile.canHitOwner) return;
       
+      // Check for Mimic immunity during mimicry
+      if (window.MimicModule && MimicModule.handleProjectileVsMimic(projectile, character)) {
+        return; // Projectile passes through mimicking Mimic
+      }
+      
       // Handle fire projectiles
       if (projectile.type === "fire" && window.DemonlordModule) {
         DemonlordModule.handleFireHit(projectile, character);
@@ -1352,6 +1422,18 @@
       if (projectile.type === "dangerskull" && window.DeathblowModule) {
         DeathblowModule.handleDangerskullHit(projectile, character);
         return; // Dangerskulls are removed within the handler
+      }
+      
+      // Handle red ball projectiles
+      if (projectile.type === "redball" && window.MimicModule) {
+        MimicModule.handleRedBallHit(projectile, character);
+        return; // Red ball continues bouncing unless 10th hit
+      }
+      
+      // Handle balloon projectiles
+      if (projectile.type === "balloon" && window.MimicModule) {
+        MimicModule.handleBalloonHit(projectile, character);
+        return; // Balloons pop on hit
       }
       
       // Default projectile hit
