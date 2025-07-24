@@ -1349,10 +1349,8 @@
     }
 
     function createCharacterGrid(id, team) {
-      const container = document.getElementById(id);
       console.log('Creating character grid for:', id, 'team:', team);
-      console.log('Characters array:', characters);
-      console.log('Container element:', container);
+      const container = document.getElementById(id);
       
       if (!container) {
         console.error('Container element not found:', id);
@@ -1363,48 +1361,21 @@
       
       characters.forEach((char, index) => {
         console.log('Adding character:', char.name, char.emoji);
+        
         const btn = document.createElement("button");
-        btn.classList.add("char-btn");
+        btn.className = "char-btn";
         btn.textContent = char.emoji;
         btn.title = char.name;
-        btn.setAttribute('data-emoji', char.emoji);
-        btn.setAttribute('data-name', char.name);
         
-        // Add multiple event listeners for better compatibility
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
+        btn.onclick = function() {
           selectCharacter(char, team);
-        });
+        };
         
-        btn.addEventListener('touchend', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          selectCharacter(char, team);
-        });
-        
-        // Add visual feedback on touch/mouse down
-        btn.addEventListener('mousedown', function(e) {
-          this.style.transform = 'scale(0.95)';
-        });
-        
-        btn.addEventListener('mouseup', function(e) {
-          this.style.transform = '';
-        });
-        
-        btn.addEventListener('touchstart', function(e) {
-          this.style.transform = 'scale(0.95)';
-        });
-        
-        btn.addEventListener('touchend', function(e) {
-          this.style.transform = '';
-        });
-         
-         container.appendChild(btn);
-       });
-       
-       console.log('Finished creating grid. Container now has', container.children.length, 'buttons');
-     }
+        container.appendChild(btn);
+      });
+      
+      console.log('Grid created with', container.children.length, 'buttons');
+    }
 
     function selectCharacter(char, team) {
       console.log('Selecting character:', char.name, 'for team:', team);
@@ -1437,15 +1408,13 @@
     function updateHighlights() {
       document.querySelectorAll(".char-btn").forEach(btn => {
         btn.classList.remove("selected-p1", "selected-p2");
-        const emoji = btn.getAttribute('data-emoji');
-        const char = characters.find(c => c.emoji === emoji);
-        if (char) {
-          if (selectedP1.some(c => c.emoji === char.emoji)) {
-            btn.classList.add("selected-p1");
-          }
-          if (selectedP2.some(c => c.emoji === char.emoji)) {
-            btn.classList.add("selected-p2");
-          }
+        const emoji = btn.textContent;
+        
+        if (selectedP1.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p1");
+        }
+        if (selectedP2.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p2");
         }
       });
     }

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Character Selection Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #222;
+      color: white;
+    }
+    
+    .team {
+      margin: 20px 0;
+      border: 2px solid #444;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    
+    .character-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      gap: 10px;
+      margin: 10px 0;
+    }
+    
+    .char-btn {
+      width: 50px;
+      height: 50px;
+      font-size: 24px;
+      background: #333;
+      border: 2px solid #666;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .char-btn:hover {
+      background: #555;
+      transform: scale(1.1);
+    }
+    
+    .char-btn.selected-p1 {
+      background: #4ade80;
+      border-color: #4ade80;
+    }
+    
+    .char-btn.selected-p2 {
+      background: #60a5fa;
+      border-color: #60a5fa;
+    }
+    
+    .start-btn {
+      background: #f59e0b;
+      border: none;
+      padding: 15px 30px;
+      font-size: 18px;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 20px 0;
+    }
+    
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 Character Selection Test</h1>
+  
+  <div class="team">
+    <h3>🟢 Player 1 (Selected: <span id="p1Count">0</span>/5)</h3>
+    <div class="character-grid" id="player1Chars"></div>
+  </div>
+  
+  <div class="team">
+    <h3>🔵 Player 2 (Selected: <span id="p2Count">0</span>/5)</h3>
+    <div class="character-grid" id="player2Chars"></div>
+  </div>
+  
+  <button class="start-btn" id="startBtn" disabled onclick="startTest()">Start Battle</button>
+  
+  <div id="debug"></div>
+
+  <script>
+    const characters = [
+      { emoji: "😈", name: "Demonlord" },
+      { emoji: "👽", name: "Terestro" },
+      { emoji: "👾", name: "Gamemaster" },
+      { emoji: "💀", name: "Deathblow" },
+      { emoji: "🤡", name: "Mimic" },
+      { emoji: "🎃", name: "Tricker" },
+      { emoji: "👹", name: "Grinch" },
+      { emoji: "👼🏻", name: "Angerus" },
+      { emoji: "🤵🏻", name: "Magico" },
+      { emoji: "🐯", name: "Clawhard" },
+      { emoji: "🦁", name: "Kingstone" },
+      { emoji: "🐺", name: "Moonhowl" },
+      { emoji: "🐻‍❄️", name: "Antarticus" },
+      { emoji: "🐼", name: "Black Spot" },
+      { emoji: "🦊", name: "Frenzy" },
+      { emoji: "🐰", name: "Hopper" }
+    ];
+
+    let selectedP1 = [];
+    let selectedP2 = [];
+
+    function createCharacterGrid(id, team) {
+      console.log('Creating grid for:', id);
+      const container = document.getElementById(id);
+      
+      if (!container) {
+        console.error('Container not found:', id);
+        return;
+      }
+
+      container.innerHTML = "";
+      
+      characters.forEach((char, index) => {
+        console.log(`Adding ${char.emoji} ${char.name}`);
+        
+        const btn = document.createElement("button");
+        btn.className = "char-btn";
+        btn.textContent = char.emoji;
+        btn.title = char.name;
+        
+        btn.onclick = function() {
+          selectCharacter(char, team);
+        };
+        
+        container.appendChild(btn);
+      });
+      
+      console.log(`Grid ${id} created with ${container.children.length} buttons`);
+    }
+
+    function selectCharacter(char, team) {
+      console.log('Selecting:', char.name, 'for team', team);
+      
+      if (team === 1) {
+        const index = selectedP1.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP1.splice(index, 1);
+        } else if (selectedP1.length < 5 && !selectedP2.some(c => c.emoji === char.emoji)) {
+          selectedP1.push(char);
+        }
+      } else {
+        const index = selectedP2.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP2.splice(index, 1);
+        } else if (selectedP2.length < 5 && !selectedP1.some(c => c.emoji === char.emoji)) {
+          selectedP2.push(char);
+        }
+      }
+      
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      // Update counters
+      document.getElementById('p1Count').textContent = selectedP1.length;
+      document.getElementById('p2Count').textContent = selectedP2.length;
+      
+      // Update highlights
+      document.querySelectorAll('.char-btn').forEach(btn => {
+        btn.classList.remove('selected-p1', 'selected-p2');
+        const emoji = btn.textContent;
+        
+        if (selectedP1.some(c => c.emoji === emoji)) {
+          btn.classList.add('selected-p1');
+        }
+        if (selectedP2.some(c => c.emoji === emoji)) {
+          btn.classList.add('selected-p2');
+        }
+      });
+      
+      // Update start button
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = selectedP1.length === 0 || selectedP2.length === 0;
+      
+      // Debug info
+      document.getElementById('debug').innerHTML = `
+        <p>P1: ${selectedP1.map(c => c.emoji).join(' ')}</p>
+        <p>P2: ${selectedP2.map(c => c.emoji).join(' ')}</p>
+      `;
+    }
+
+    function startTest() {
+      alert(`Starting battle!\nP1: ${selectedP1.map(c => c.name).join(', ')}\nP2: ${selectedP2.map(c => c.name).join(', ')}`);
+    }
+
+    // Initialize
+    console.log('Initializing...');
+    createCharacterGrid('player1Chars', 1);
+    createCharacterGrid('player2Chars', 2);
+    updateDisplay();
+    console.log('Initialization complete!');
+  </script>
+</body>
+</html>
