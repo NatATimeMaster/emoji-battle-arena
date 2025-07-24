@@ -574,6 +574,7 @@
   <script src="kingstone.js"></script>
   <script src="moonhowl.js"></script>
   <script src="antarticus.js"></script>
+  <script src="blackspot.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -1390,6 +1391,9 @@
         if (window.AntarticusModule) {
           AntarticusModule.initializeAbilities(this);
         }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.initializeAbilities(this);
+        }
         // Additional character modules will be added here
       }
 
@@ -1507,15 +1511,23 @@
         if (window.AntarticusModule) {
           AntarticusModule.handleAbilities(this);
         }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
       takeDamage(amount, source = null) {
         if (this.isDead || this.invulnerable) return false;
         
-        // Handle Kael's Divine Heal tracking
+        // Handle character-specific damage tracking
         if (window.KaelModule) {
           KaelModule.handleDamageReceived(this, amount);
+        }
+        
+        // Handle Black Spot hit tracking
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleHitReceived(this);
         }
         
         // Apply damage to fake HP first, then real HP
@@ -1600,6 +1612,9 @@
         }
         if (window.AntarticusModule) {
           AntarticusModule.handleCharacterDeath(this);
+        }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -2078,13 +2093,21 @@
            // Basic collision damage
            victim.takeDamage(1, attacker);
            audio.hit();
-        } else if (attacker.emoji === "🐻‍❄️" && window.AntarticusModule) {
-           // Handle Antarticus direct hits (only when enemy is frozen)
-           const handled = AntarticusModule.handleDirectHit(attacker, victim);
-           if (!handled) {
-             // No direct hit damage if enemy not frozen
-             // Don't deal basic collision damage either
-           }
+                 } else if (attacker.emoji === "🐻‍❄️" && window.AntarticusModule) {
+            // Handle Antarticus direct hits (only when enemy is frozen)
+            const handled = AntarticusModule.handleDirectHit(attacker, victim);
+            if (!handled) {
+              // No direct hit damage if enemy not frozen
+              // Don't deal basic collision damage either
+            }
+        } else if (attacker.emoji === "🐼" && window.BlackSpotModule) {
+            // Handle Black Spot direct hits
+            const handled = BlackSpotModule.handleDirectHit(attacker, victim);
+            if (!handled) {
+              // Fallback to basic damage if hit was on cooldown
+              victim.takeDamage(1, attacker);
+              audio.hit();
+            }
         } else {
           // Basic collision damage for other characters
           victim.takeDamage(1, attacker);
@@ -2125,6 +2148,12 @@
           }
           
           c.update();
+          
+          // Check leaf consumption for Black Spot
+          if (window.BlackSpotModule) {
+            BlackSpotModule.checkLeafConsumption(c);
+          }
+          
           c.draw(ctx);
           
           // Draw character-specific overlays
