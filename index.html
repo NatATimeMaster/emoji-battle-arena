@@ -575,6 +575,7 @@
   <script src="moonhowl.js"></script>
   <script src="antarticus.js"></script>
   <script src="blackspot.js"></script>
+  <script src="frenzy.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -1394,6 +1395,9 @@
         if (window.BlackSpotModule) {
           BlackSpotModule.initializeAbilities(this);
         }
+        if (window.FrenzyModule) {
+          FrenzyModule.initializeAbilities(this);
+        }
         // Additional character modules will be added here
       }
 
@@ -1514,6 +1518,9 @@
         if (window.BlackSpotModule) {
           BlackSpotModule.handleAbilities(this);
         }
+        if (window.FrenzyModule) {
+          FrenzyModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1615,6 +1622,9 @@
         }
         if (window.BlackSpotModule) {
           BlackSpotModule.handleCharacterDeath(this);
+        }
+        if (window.FrenzyModule) {
+          FrenzyModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -2100,14 +2110,22 @@
               // No direct hit damage if enemy not frozen
               // Don't deal basic collision damage either
             }
-        } else if (attacker.emoji === "🐼" && window.BlackSpotModule) {
-            // Handle Black Spot direct hits
-            const handled = BlackSpotModule.handleDirectHit(attacker, victim);
-            if (!handled) {
-              // Fallback to basic damage if hit was on cooldown
-              victim.takeDamage(1, attacker);
-              audio.hit();
-            }
+                 } else if (attacker.emoji === "🐼" && window.BlackSpotModule) {
+             // Handle Black Spot direct hits
+             const handled = BlackSpotModule.handleDirectHit(attacker, victim);
+             if (!handled) {
+               // Fallback to basic damage if hit was on cooldown
+               victim.takeDamage(1, attacker);
+               audio.hit();
+             }
+        } else if (attacker.emoji === "🦊" && window.FrenzyModule) {
+             // Handle Frenzy direct hits with speed stacking
+             const handled = FrenzyModule.handleDirectHit(attacker, victim);
+             if (!handled) {
+               // Fallback to basic damage if hit was on cooldown
+               victim.takeDamage(1, attacker);
+               audio.hit();
+             }
         } else {
           // Basic collision damage for other characters
           victim.takeDamage(1, attacker);
