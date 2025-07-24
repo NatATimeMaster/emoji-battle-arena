@@ -571,6 +571,7 @@
   <script src="kael.js"></script>
   <script src="magico.js"></script>
   <script src="clawhard.js"></script>
+  <script src="kingstone.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -717,6 +718,10 @@
         
         if (this.type === "windslash") {
           return this.handleWindslashUpdate();
+        }
+        
+        if (this.type === "leo") {
+          return this.handleLeoUpdate();
         }
 
         // Default projectile behavior
@@ -1026,6 +1031,30 @@
         return true;
       }
 
+      handleLeoUpdate() {
+        // Handle wall bouncing for Leo projectiles
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced && window.KingstoneModule) {
+          KingstoneModule.handleLeoBounce(this);
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1140,11 +1169,15 @@
             // Life Surge active
             ctx.shadowColor = "#00ff88";
             ctx.shadowBlur = 10;
-          } else {
-            // Normal windslash
-            ctx.shadowColor = "#88ccff";
-            ctx.shadowBlur = 8;
-          }
+                     } else {
+             // Normal windslash
+             ctx.shadowColor = "#88ccff";
+             ctx.shadowBlur = 8;
+           }
+        } else if (this.type === "leo") {
+          // Leo-specific visual effects
+          ctx.shadowColor = "#ffd700"; // Golden glow
+          ctx.shadowBlur = 12;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -1224,6 +1257,9 @@
         }
         if (window.ClawhardModule) {
           ClawhardModule.initializeAbilities(this);
+        }
+        if (window.KingstoneModule) {
+          KingstoneModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1319,6 +1355,9 @@
         if (window.ClawhardModule) {
           ClawhardModule.handleAbilities(this);
         }
+        if (window.KingstoneModule) {
+          KingstoneModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1395,6 +1434,9 @@
         }
         if (window.ClawhardModule) {
           ClawhardModule.handleCharacterDeath(this);
+        }
+        if (window.KingstoneModule) {
+          KingstoneModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1761,6 +1803,12 @@
         return; // Windslashes are removed within handler
       }
       
+      // Handle Leo projectiles
+      if (projectile.type === "leo" && window.KingstoneModule) {
+        KingstoneModule.handleLeoHit(projectile, character);
+        return; // Leo evolution handled within module
+      }
+      
       // Default projectile hit
       character.takeDamage(projectile.damage, projectile.owner);
       audio.hit();
@@ -1821,6 +1869,28 @@
       // Handle character-specific collision damage
       if (attacker.emoji === "💀" && window.DeathblowModule) {
         DeathblowModule.handleEnemyHit(attacker, victim);
+      } else if (attacker.emoji === "🦁" && window.KingstoneModule) {
+        // Handle Kingstone direct hits
+        if (attacker.abilityData && attacker.abilityData.isPrideLeader) {
+          const handled = KingstoneModule.handleDirectHit(attacker, victim);
+          if (!handled) {
+            // Fallback to basic damage if hit was on cooldown
+            victim.takeDamage(1, attacker);
+            audio.hit();
+          }
+        } else if (attacker.abilityData && !attacker.abilityData.isPrideLeader) {
+          // Handle Pride member hits
+          const handled = KingstoneModule.handlePrideMemberHit(attacker, victim);
+          if (!handled) {
+            // Fallback to basic damage if hit was on cooldown
+            victim.takeDamage(1, attacker);
+            audio.hit();
+          }
+        } else {
+          // Basic collision damage for other lions
+          victim.takeDamage(1, attacker);
+          audio.hit();
+        }
       } else {
         // Basic collision damage for other characters
         victim.takeDamage(1, attacker);
