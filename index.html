@@ -572,6 +572,7 @@
   <script src="magico.js"></script>
   <script src="clawhard.js"></script>
   <script src="kingstone.js"></script>
+  <script src="moonhowl.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -722,6 +723,10 @@
         
         if (this.type === "leo") {
           return this.handleLeoUpdate();
+        }
+        
+        if (this.type === "moon" || this.type === "fullmoon" || this.type === "guaranteedmoon" || this.type === "wolfsense") {
+          return this.handleMoonUpdate();
         }
 
         // Default projectile behavior
@@ -1055,6 +1060,53 @@
         return true;
       }
 
+      handleMoonUpdate() {
+        // Handle guaranteed moon movement
+        if (this.type === "guaranteedmoon" && window.MoonhowlModule) {
+          return MoonhowlModule.handleGuaranteedMoonUpdate(this);
+        }
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        // Handle wall bouncing for regular and full moons
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced) {
+          this.data.bounceCount++;
+          
+          // Handle Full Moon border bouncing
+          if (this.type === "fullmoon" && this.data.bounceCount >= this.data.maxBounces) {
+            if (window.MoonhowlModule) {
+              MoonhowlModule.handleFullMoonBorderHit(this);
+            }
+            return false;
+          }
+        }
+
+        // Handle Wolfsense movement
+        if (this.type === "wolfsense" && window.MoonhowlModule) {
+          // Wolfsense movement is handled in MoonhowlModule.updateWolfsense
+          return true;
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1174,10 +1226,26 @@
              ctx.shadowColor = "#88ccff";
              ctx.shadowBlur = 8;
            }
-        } else if (this.type === "leo") {
-          // Leo-specific visual effects
-          ctx.shadowColor = "#ffd700"; // Golden glow
+                 } else if (this.type === "leo") {
+           // Leo-specific visual effects
+           ctx.shadowColor = "#ffd700"; // Golden glow
+           ctx.shadowBlur = 12;
+        } else if (this.type === "fullmoon") {
+          // Full Moon - bright golden glow
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 20;
+        } else if (this.type === "guaranteedmoon") {
+          // Guaranteed Moon - red/orange glow
+          ctx.shadowColor = "#ff4500";
+          ctx.shadowBlur = 15;
+        } else if (this.type === "wolfsense") {
+          // Wolfsense - eerie blue glow
+          ctx.shadowColor = "#00bfff";
           ctx.shadowBlur = 12;
+        } else if (this.type === "moon") {
+          // Regular Moon - soft silver glow
+          ctx.shadowColor = "#c0c0c0";
+          ctx.shadowBlur = 8;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -1260,6 +1328,9 @@
         }
         if (window.KingstoneModule) {
           KingstoneModule.initializeAbilities(this);
+        }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1358,6 +1429,9 @@
         if (window.KingstoneModule) {
           KingstoneModule.handleAbilities(this);
         }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1437,6 +1511,9 @@
         }
         if (window.KingstoneModule) {
           KingstoneModule.handleCharacterDeath(this);
+        }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1809,6 +1886,18 @@
         return; // Leo evolution handled within module
       }
       
+      // Handle moon projectiles
+      if (projectile.type === "moon" && window.MoonhowlModule) {
+        MoonhowlModule.handleMoonHit(projectile, character);
+        return; // Moons are removed within handler
+      }
+      
+      // Handle Full Moon projectiles
+      if (projectile.type === "fullmoon" && window.MoonhowlModule) {
+        MoonhowlModule.handleFullMoonHit(projectile, character);
+        return; // Full Moons are removed within handler
+      }
+      
       // Default projectile hit
       character.takeDamage(projectile.damage, projectile.owner);
       audio.hit();
@@ -1886,16 +1975,22 @@
             victim.takeDamage(1, attacker);
             audio.hit();
           }
+                   } else {
+             // Basic collision damage for other lions
+             victim.takeDamage(1, attacker);
+             audio.hit();
+           }
+        } else if (victim.emoji === "🐺" && window.MoonhowlModule) {
+          // Handle Wolfsense removal when Moonhowl is hit
+          MoonhowlModule.handleWolfsenseRemoval(victim);
+          // Basic collision damage
+          victim.takeDamage(1, attacker);
+          audio.hit();
         } else {
-          // Basic collision damage for other lions
+          // Basic collision damage for other characters
           victim.takeDamage(1, attacker);
           audio.hit();
         }
-      } else {
-        // Basic collision damage for other characters
-        victim.takeDamage(1, attacker);
-        audio.hit();
-      }
     }
 
     // Game loop
