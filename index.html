@@ -568,6 +568,7 @@
   <script src="mimic.js"></script>
   <script src="tricker.js"></script>
   <script src="grinch.js"></script>
+  <script src="kael.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -702,6 +703,10 @@
         
         if (this.type === "giantboulder" || this.type === "boulder" || this.type === "rock") {
           return this.handleBoulderUpdate();
+        }
+        
+        if (this.type === "blackblock" || this.type === "whiteblock") {
+          return this.handleBlockUpdate();
         }
 
         // Default projectile behavior
@@ -943,6 +948,44 @@
         return true;
       }
 
+      handleBlockUpdate() {
+        // Check wall collision - blocks disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        // Enhanced blocks can block other projectiles
+        if (this.data.enhanced && this.data.canBlockProjectiles) {
+          this.checkProjectileBlocking();
+        }
+
+        return true;
+      }
+
+      checkProjectileBlocking() {
+        // Check collision with other projectiles for enhanced blocks
+        projectiles.forEach(otherProjectile => {
+          if (otherProjectile === this) return;
+          if (otherProjectile.owner === this.owner) return; // Don't block own projectiles
+          
+          const dx = this.x - otherProjectile.x;
+          const dy = this.y - otherProjectile.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < (this.size + otherProjectile.size)) {
+            if (window.KaelModule) {
+              KaelModule.handleEnhancedBlockVsProjectile(this, otherProjectile);
+            }
+          }
+        });
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1001,9 +1044,31 @@
           } else if (this.data.boulderType === "boulder") {
             ctx.shadowColor = "#8b4513";
             ctx.shadowBlur = 10;
-          } else if (this.data.boulderType === "rock") {
-            ctx.shadowColor = "#8b4513";
-            ctx.shadowBlur = 5;
+                     } else if (this.data.boulderType === "rock") {
+             ctx.shadowColor = "#8b4513";
+             ctx.shadowBlur = 5;
+           }
+        } else if (this.type === "blackblock" || this.type === "whiteblock") {
+          // Block effects
+          if (this.data.enhanced) {
+            if (this.data.blockType === "black") {
+              ctx.shadowColor = "#000000";
+              ctx.shadowBlur = 15;
+            } else {
+              ctx.shadowColor = "#ffffff";
+              ctx.shadowBlur = 15;
+            }
+            // Pulsing effect for enhanced blocks
+            const pulse = Math.sin(this.age * 0.2) * 0.3 + 0.7;
+            ctx.globalAlpha = pulse;
+          } else {
+            if (this.data.blockType === "black") {
+              ctx.shadowColor = "#333333";
+              ctx.shadowBlur = 8;
+            } else {
+              ctx.shadowColor = "#cccccc";
+              ctx.shadowBlur = 8;
+            }
           }
         }
         
@@ -1075,6 +1140,9 @@
         }
         if (window.GrinchModule) {
           GrinchModule.initializeAbilities(this);
+        }
+        if (window.KaelModule) {
+          KaelModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1161,11 +1229,19 @@
         if (window.GrinchModule) {
           GrinchModule.handleAbilities(this);
         }
+        if (window.KaelModule) {
+          KaelModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
       takeDamage(amount, source = null) {
         if (this.isDead || this.invulnerable) return false;
+        
+        // Handle Kael's Divine Heal tracking
+        if (window.KaelModule) {
+          KaelModule.handleDamageReceived(this, amount);
+        }
         
         // Apply damage to fake HP first, then real HP
         if (this.fakeHp > 0) {
@@ -1223,6 +1299,9 @@
         }
         if (window.GrinchModule) {
           GrinchModule.handleCharacterDeath(this);
+        }
+        if (window.KaelModule) {
+          KaelModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1569,6 +1648,12 @@
       if ((projectile.type === "giantboulder" || projectile.type === "boulder" || projectile.type === "rock") && window.GrinchModule) {
         GrinchModule.handleBoulderHit(projectile, character);
         return; // Boulders are removed or split within handler
+      }
+      
+      // Handle block projectiles (black and white blocks)
+      if ((projectile.type === "blackblock" || projectile.type === "whiteblock") && window.KaelModule) {
+        KaelModule.handleBlockHit(projectile, character);
+        return; // Blocks are removed within handler
       }
       
       // Default projectile hit
