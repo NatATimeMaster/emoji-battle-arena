@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emoji Arena</title>
+  <style>
+    :root {
+      --player1-color: #4CAF50;
+      --player2-color: #2196F3;
+      --arena-bg: linear-gradient(135deg, #1e1e2e, #2d2d44);
+      --text-glow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: var(--arena-bg);
+      color: #fff;
+      user-select: none;
+    }
+
+    /* Character Selection Overlay */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .overlay h1 {
+      font-size: clamp(1.5rem, 5vw, 3rem);
+      margin: 10px 0;
+      text-shadow: var(--text-glow);
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #f9ca24);
+      background-size: 400% 400%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient 3s ease infinite;
+      text-align: center;
+    }
+
+    .overlay h2 {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+      text-align: center;
+    }
+
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .team-select {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1000px;
+      gap: 20px;
+    }
+
+    @media (min-width: 768px) {
+      .team-select {
+        flex-direction: row;
+        gap: 30px;
+      }
+    }
+
+    .team {
+      flex: 1;
+      min-width: 280px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 15px;
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .team h3 {
+      text-align: center;
+      font-size: clamp(1rem, 4vw, 1.8rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+    }
+
+    .character-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    @media (min-width: 480px) {
+      .character-grid {
+        grid-template-columns: repeat(6, 1fr);
+      }
+    }
+
+    @media (min-width: 768px) {
+      .character-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .char-btn {
+      aspect-ratio: 1;
+      font-size: clamp(1.2rem, 5vw, 2rem);
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      cursor: pointer;
+      color: white;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 45px;
+    }
+
+    .char-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .char-btn:active {
+      transform: scale(0.95);
+    }
+
+    .char-btn.selected-p1 {
+      background: var(--player1-color);
+      border-color: var(--player1-color);
+      color: white;
+      box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    }
+
+    .char-btn.selected-p2 {
+      background: var(--player2-color);
+      border-color: var(--player2-color);
+      color: white;
+      box-shadow: 0 0 20px rgba(33, 150, 243, 0.6);
+    }
+
+    .selection-info {
+      text-align: center;
+      margin: 10px 0;
+      font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+      opacity: 0.8;
+    }
+
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .start-btn {
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      padding: 12px 30px;
+      background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+      border: none;
+      border-radius: 25px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+      transition: all 0.3s ease;
+      min-width: 150px;
+    }
+
+    .start-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 7px 20px rgba(255, 107, 107, 0.6);
+    }
+
+    .start-btn:active {
+      transform: translateY(0);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .hint {
+      margin: 10px 0 0 0;
+      font-size: clamp(0.6rem, 2vw, 0.9rem);
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    /* Arena Container */
+    .arena-container {
+      width: 100vw;
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+    }
+
+    .info-header {
+      text-align: center;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin-bottom: 10px;
+      text-shadow: var(--text-glow);
+      font-weight: bold;
+    }
+
+    .hp-area {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100vw;
+      min-height: 60px;
+      overflow: hidden;
+      padding: 0 5px;
+      box-sizing: border-box;
+    }
+
+    .team-column {
+      flex: 1;
+      max-width: 48%;
+      min-width: 120px;
+      overflow: hidden;
+    }
+
+    .team-header {
+      font-size: clamp(0.8rem, 2.5vw, 1.2rem);
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 8px;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+      padding-bottom: 3px;
+    }
+
+    .hp-container {
+      margin-bottom: 5px;
+    }
+
+    .hp-bar-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      margin-bottom: 3px;
+    }
+
+    #player1HP .hp-bar-wrapper {
+      justify-content: flex-start;
+    }
+
+    #player2HP .hp-bar-wrapper {
+      justify-content: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .character-icon {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      min-width: 25px;
+      text-align: center;
+    }
+
+    .hp-bar {
+      background: rgba(0, 0, 0, 0.7);
+      height: 16px;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 50px;
+      max-width: 120px;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      overflow: hidden;
+    }
+
+    .hp-bar .current-hp {
+      background: linear-gradient(90deg, #4CAF50, #8BC34A);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px;
+      transition: width 0.5s ease;
+      width: 100%;
+    }
+
+    .hp-bar .shield {
+      background: linear-gradient(90deg, #fff, #e0e0e0);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      right: 0;
+      border-radius: 0 6px 6px 0;
+      opacity: 0.9;
+      width: 0%;
+    }
+
+    .hp-bar .fakehp {
+      background: linear-gradient(90deg, #ffeb3b, #ffc107);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px 0 0 6px;
+      opacity: 0.8;
+      width: 0%;
+    }
+
+    .hp-text {
+      font-size: clamp(0.6rem, 2vw, 0.8rem);
+      color: #fff;
+      min-width: 40px;
+      text-align: right;
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    canvas {
+      border: 3px solid rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      flex: 1;
+      max-width: 95vw;
+      max-height: 65vh;
+      background: radial-gradient(circle, #2c2c54, #1a1a2e);
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    }
+
+    canvas.hell-trial {
+      background: radial-gradient(circle, #4a1a1a, #2a0a0a);
+      border-color: #ff4444;
+      box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    }
+
+    /* Game Over Screen */
+    .game-over {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      padding: 30px;
+      border: 3px solid #fff;
+      border-radius: 20px;
+      text-align: center;
+      z-index: 10000;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+      display: none;
+    }
+
+    .game-over.show {
+      display: block;
+    }
+
+    .game-over h2 {
+      margin: 0 0 20px 0;
+      color: #fff;
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      text-shadow: var(--text-glow);
+    }
+
+    .game-over .winner {
+      font-size: clamp(2rem, 8vw, 4rem);
+      margin: 20px 0;
+      background: linear-gradient(45deg, #ffd700, #ff8c00);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .reset-btn {
+      margin-top: 15px;
+      padding: 12px 25px;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      cursor: pointer;
+      background: linear-gradient(45deg, #e74c3c, #c0392b);
+      color: white;
+      border: 2px solid #e74c3c;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      font-weight: bold;
+    }
+
+    .reset-btn:hover {
+      background: linear-gradient(45deg, #c0392b, #a93226);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+    }
+
+    /* Death Animation */
+    .death-animation {
+      position: absolute;
+      pointer-events: none;
+      font-size: 48px;
+      animation: deathPop 2s ease-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes deathPop {
+      0% { 
+        transform: scale(1) rotate(0deg); 
+        opacity: 1; 
+      }
+      50% { 
+        transform: scale(2.5) rotate(180deg); 
+        opacity: 0.8; 
+      }
+      100% { 
+        transform: scale(0) rotate(360deg); 
+        opacity: 0; 
+      }
+    }
+
+    /* Status Indicators */
+    .status-indicators {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      max-width: 60px;
+    }
+
+    .status-indicator {
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 0.6rem;
+      padding: 1px 3px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .team {
+        padding: 10px;
+        min-width: 250px;
+      }
+      
+      .character-grid {
+        gap: 5px;
+      }
+      
+      .hp-area {
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      
+      canvas {
+        max-height: 55vh;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .overlay h1 {
+        margin: 5px 0;
+      }
+      
+      .team {
+        padding: 10px;
+      }
+      
+      .controls {
+        margin-top: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="characterSelect">
+    <h1>⚔️ Emoji Arena ⚔️</h1>
+    <h2>Choose Your Champions</h2>
+    <div class="selection-info">Select up to 5 characters per team</div>
+    <div class="team-select">
+      <div class="team">
+        <h3>🟢 Player 1</h3>
+        <div class="character-grid" id="player1Chars"></div>
+        <div class="selection-info">Selected: <span id="p1Count">0</span>/5</div>
+      </div>
+      <div class="team">
+        <h3>🔵 Player 2</h3>
+        <div class="character-grid" id="player2Chars"></div>
+        <div class="selection-info">Selected: <span id="p2Count">0</span>/5</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="start-btn" onclick="startGame()" id="startBtn" disabled>Start Battle</button>
+      <div class="hint">Select at least one character for each team to begin</div>
+    </div>
+  </div>
+
+  <div class="arena-container" id="arenaContainer">
+    <div class="info-header" id="matchInfo"></div>
+    <div class="hp-area">
+      <div class="team-column" id="player1HP">
+        <div class="team-header">🟢 Player 1</div>
+      </div>
+      <div class="team-column" id="player2HP">
+        <div class="team-header">🔵 Player 2</div>
+      </div>
+    </div>
+    <canvas id="arena"></canvas>
+    <div class="status-indicators" id="globalStatus"></div>
+  </div>
+
+  <div class="game-over" id="gameOver">
+    <h2 id="gameOverTitle">Game Over</h2>
+    <div class="winner" id="winnerText"></div>
+    <button class="reset-btn" onclick="resetGame()">Play Again</button>
+  </div>
+
+  <script>
+    // Character definitions with emojis
+    const characters = [
+      { emoji: "😈", name: "Demonlord" },
+      { emoji: "👽", name: "Terestro" },
+      { emoji: "👾", name: "Gamemaster" },
+      { emoji: "💀", name: "Deathblow" },
+      { emoji: "🤡", name: "Mimic" },
+      { emoji: "🎃", name: "Tricker" },
+      { emoji: "👹", name: "Grinch" },
+      { emoji: "👼🏻", name: "Angerus" },
+      { emoji: "🤵🏻", name: "Magico" },
+      { emoji: "🐯", name: "Clawhard" },
+      { emoji: "🦁", name: "Kingstone" },
+      { emoji: "🐺", name: "Moonhowl" },
+      { emoji: "🐻‍❄️", name: "Antarticus" },
+      { emoji: "🐼", name: "Black Spot" },
+      { emoji: "🦊", name: "Frenzy" },
+      { emoji: "🐰", name: "Hopper" }
+    ];
+
+    // Game state
+    let selectedP1 = [];
+    let selectedP2 = [];
+    let ctx, canvas;
+    let charactersInArena = [];
+    let projectiles = [];
+    let gameRunning = false;
+    let gameTime = 0;
+
+    // Audio system for sound effects
+    class AudioManager {
+      constructor() {
+        this.audioContext = null;
+        this.initAudio();
+      }
+
+      initAudio() {
+        try {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn('Audio not supported');
+        }
+      }
+
+      playSound(frequency, duration = 0.1, type = 'sine', volume = 0.1) {
+        if (!this.audioContext) return;
+        
+        try {
+          const oscillator = this.audioContext.createOscillator();
+          const gainNode = this.audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(this.audioContext.destination);
+          
+          oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+          oscillator.type = type;
+          
+          gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+          
+          oscillator.start(this.audioContext.currentTime);
+          oscillator.stop(this.audioContext.currentTime + duration);
+        } catch (e) {
+          // Silent fail
+        }
+      }
+
+      shoot() { this.playSound(660, 0.1, 'square', 0.05); }
+      hit() { this.playSound(880, 0.15, 'sawtooth', 0.08); }
+      bounce() { this.playSound(220, 0.1, 'triangle', 0.06); }
+      death() { this.playSound(110, 0.5, 'sine', 0.1); }
+      ability() { this.playSound(1100, 0.2, 'square', 0.07); }
+    }
+
+    const audio = new AudioManager();
+
+    // Basic Character class
+    class ArenaCharacter {
+      constructor(emoji, name, x, y, team) {
+        this.emoji = emoji;
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() * 2 - 1) * 2;
+        this.vy = (Math.random() * 2 - 1) * 2;
+        this.angle = 0;
+        this.team = team;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.fakeHp = 0;
+        this.shield = 0;
+        this.size = 16;
+        this.isDead = false;
+        this.frozen = false;
+        this.frozenUntil = 0;
+        this.invulnerable = false;
+        this.invulnerableUntil = 0;
+        this.lastAbilityTime = 0;
+        this.statusEffects = new Map();
+        this.abilityData = {};
+
+        // Initialize character-specific data (to be expanded per character)
+        this.initializeAbilities();
+      }
+
+      initializeAbilities() {
+        // Base initialization - will be expanded for each character
+        this.abilityData = {
+          initialized: true
+        };
+      }
+
+      update() {
+        if (this.isDead) return;
+
+        // Handle frozen state
+        if (this.frozen && gameTime < this.frozenUntil) {
+          return;
+        } else {
+          this.frozen = false;
+        }
+
+        // Handle invulnerability
+        if (this.invulnerable && gameTime < this.invulnerableUntil) {
+          // Still invulnerable
+        } else {
+          this.invulnerable = false;
+        }
+
+        // Basic movement
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Wall collision
+        const r = this.size;
+        if (this.x < r) {
+          this.x = r;
+          this.vx *= -1;
+          this.handleWallCollision('left');
+        } else if (this.x > canvas.width - r) {
+          this.x = canvas.width - r;
+          this.vx *= -1;
+          this.handleWallCollision('right');
+        }
+
+        if (this.y < r) {
+          this.y = r;
+          this.vy *= -1;
+          this.handleWallCollision('top');
+        } else if (this.y > canvas.height - r) {
+          this.y = canvas.height - r;
+          this.vy *= -1;
+          this.handleWallCollision('bottom');
+        }
+
+        this.angle += 0.05;
+
+        // Handle abilities (to be expanded per character)
+        this.handleAbilities();
+      }
+
+      handleWallCollision(side) {
+        // To be overridden by specific characters
+      }
+
+      handleAbilities() {
+        // To be overridden by specific characters
+      }
+
+      takeDamage(amount, source = null) {
+        if (this.isDead || this.invulnerable) return false;
+        
+        // Apply damage to fake HP first, then real HP
+        if (this.fakeHp > 0) {
+          const fakeReduction = Math.min(this.fakeHp, amount);
+          this.fakeHp -= fakeReduction;
+          amount -= fakeReduction;
+        }
+        
+        if (amount > 0) {
+          this.hp -= amount;
+          if (this.hp <= 0) {
+            this.hp = 0;
+            this.die();
+          }
+        }
+        
+        return true;
+      }
+
+      heal(amount) {
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+      }
+
+      addFakeHp(amount) {
+        this.fakeHp = Math.min(this.maxHp - this.hp, this.fakeHp + amount);
+      }
+
+      freeze(duration) {
+        this.frozen = true;
+        this.frozenUntil = gameTime + duration;
+      }
+
+      die() {
+        this.isDead = true;
+        audio.death();
+        
+        // Create death animation
+        this.createDeathAnimation();
+        
+        // Check win condition after delay
+        setTimeout(() => {
+          checkWinCondition();
+        }, 5000); // 5 second delay as specified
+      }
+
+      createDeathAnimation() {
+        const rect = canvas.getBoundingClientRect();
+        const deathAnim = document.createElement('div');
+        deathAnim.className = 'death-animation';
+        deathAnim.textContent = this.emoji;
+        deathAnim.style.left = `${rect.left + this.x - 24}px`;
+        deathAnim.style.top = `${rect.top + this.y - 24}px`;
+        document.body.appendChild(deathAnim);
+        
+        setTimeout(() => {
+          deathAnim.remove();
+        }, 2000);
+      }
+
+      draw(ctx) {
+        if (this.isDead) return;
+        
+        ctx.save();
+        
+        // Glow effects for special states
+        if (this.invulnerable) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 10;
+        }
+        
+        if (this.frozen) {
+          ctx.shadowColor = "#00ffff";
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.font = "32px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        ctx.fillText(this.emoji, 0, 0);
+        
+        ctx.restore();
+      }
+
+      getNearestEnemy() {
+        let nearest = null;
+        let minDistance = Infinity;
+        
+        charactersInArena.forEach(c => {
+          if (c.team !== this.team && !c.isDead) {
+            const distance = Math.hypot(c.x - this.x, c.y - this.y);
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearest = c;
+            }
+          }
+        });
+        
+        return nearest;
+      }
+    }
+
+    // Character selection functions
+    function createCharacterGrid(id, team) {
+      const container = document.getElementById(id);
+      container.innerHTML = "";
+      
+      characters.forEach(char => {
+        const btn = document.createElement("button");
+        btn.classList.add("char-btn");
+        btn.textContent = char.emoji;
+        btn.title = char.name;
+        btn.onclick = () => selectCharacter(char, team);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectCharacter(char, team) {
+      if (team === 1) {
+        const index = selectedP1.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP1.splice(index, 1);
+        } else if (selectedP1.length < 5 && !selectedP2.some(c => c.emoji === char.emoji)) {
+          selectedP1.push(char);
+        }
+      } else if (team === 2) {
+        const index = selectedP2.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP2.splice(index, 1);
+        } else if (selectedP2.length < 5 && !selectedP1.some(c => c.emoji === char.emoji)) {
+          selectedP2.push(char);
+        }
+      }
+      
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      // Update counters
+      document.getElementById('p1Count').textContent = selectedP1.length;
+      document.getElementById('p2Count').textContent = selectedP2.length;
+      
+      // Update button highlights
+      document.querySelectorAll(".char-btn").forEach(btn => {
+        btn.classList.remove("selected-p1", "selected-p2");
+        const emoji = btn.textContent;
+        
+        if (selectedP1.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p1");
+        }
+        if (selectedP2.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p2");
+        }
+      });
+      
+      // Update start button
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = selectedP1.length === 0 || selectedP2.length === 0;
+    }
+
+    function startGame() {
+      if (selectedP1.length === 0 || selectedP2.length === 0) {
+        return;
+      }
+      
+      // Initialize audio context on user interaction
+      if (audio.audioContext && audio.audioContext.state === 'suspended') {
+        audio.audioContext.resume();
+      }
+      
+      // Hide selection overlay and show arena
+      document.getElementById("characterSelect").style.display = "none";
+      document.getElementById("arenaContainer").style.display = "flex";
+      
+      // Set match info
+      const info = selectedP1.length > 1 || selectedP2.length > 1 ?
+        `Team Battle: ${selectedP1.length} vs ${selectedP2.length}` : 
+        `${selectedP1[0].emoji} VS ${selectedP2[0].emoji}`;
+      document.getElementById("matchInfo").textContent = info;
+      
+      // Create HP displays
+      createHPDisplays();
+      
+      // Initialize canvas
+      canvas = document.getElementById("arena");
+      canvas.width = Math.min(window.innerWidth * 0.9, 1000);
+      canvas.height = Math.min(window.innerHeight * 0.6, 600);
+      ctx = canvas.getContext("2d");
+      
+      // Create characters
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      // Position team 1
+      const gapX1 = canvas.width / (selectedP1.length + 1);
+      selectedP1.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX1 * (i + 1), canvas.height * 0.2, 1
+        ));
+      });
+      
+      // Position team 2
+      const gapX2 = canvas.width / (selectedP2.length + 1);
+      selectedP2.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX2 * (i + 1), canvas.height * 0.8, 2
+        ));
+      });
+      
+      gameRunning = true;
+      requestAnimationFrame(gameLoop);
+    }
+
+    function createHPDisplays() {
+      const hp1 = document.getElementById("player1HP");
+      const hp2 = document.getElementById("player2HP");
+      
+      // Clear existing content except headers
+      hp1.innerHTML = '<div class="team-header">🟢 Player 1</div>';
+      hp2.innerHTML = '<div class="team-header">🔵 Player 2</div>';
+      
+      selectedP1.forEach(char => {
+        const div = document.createElement('div');
+        div.className = 'hp-container';
+        div.innerHTML = `
+          <div class="hp-bar-wrapper">
+            <div class="character-icon">${char.emoji}</div>
+            <div class="hp-bar">
+              <div class="current-hp"></div>
+              <div class="fakehp"></div>
+              <div class="shield"></div>
+            </div>
+            <div class="hp-text">100</div>
+          </div>
+        `;
+        hp1.appendChild(div);
+      });
+      
+      selectedP2.forEach(char => {
+        const div = document.createElement('div');
+        div.className = 'hp-container';
+        div.innerHTML = `
+          <div class="hp-bar-wrapper">
+            <div class="character-icon">${char.emoji}</div>
+            <div class="hp-bar">
+              <div class="current-hp"></div>
+              <div class="fakehp"></div>
+              <div class="shield"></div>
+            </div>
+            <div class="hp-text">100</div>
+          </div>
+        `;
+        hp2.appendChild(div);
+      });
+    }
+
+    function updateHPDisplays() {
+      const hp1Elements = document.querySelectorAll("#player1HP .hp-container");
+      const hp2Elements = document.querySelectorAll("#player2HP .hp-container");
+      
+      selectedP1.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 1);
+        if (character && hp1Elements[i]) {
+          updateCharacterStatus(hp1Elements[i], character);
+        }
+      });
+      
+      selectedP2.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 2);
+        if (character && hp2Elements[i]) {
+          updateCharacterStatus(hp2Elements[i], character);
+        }
+      });
+    }
+
+    function updateCharacterStatus(element, character) {
+      const currentHp = element.querySelector('.current-hp');
+      const fakeHp = element.querySelector('.fakehp');
+      const shield = element.querySelector('.shield');
+      const hpText = element.querySelector('.hp-text');
+      
+      const hpPercentage = (character.hp / character.maxHp) * 100;
+      const fakePercentage = (character.fakeHp / character.maxHp) * 100;
+      const shieldPercentage = (character.shield / character.maxHp) * 100;
+      
+      currentHp.style.width = `${hpPercentage}%`;
+      fakeHp.style.width = `${fakePercentage}%`;
+      shield.style.width = `${shieldPercentage}%`;
+      hpText.textContent = Math.ceil(character.hp);
+      
+      if (character.isDead) {
+        element.style.opacity = '0.3';
+      }
+    }
+
+    // Collision detection
+    function handleCharacterCollisions() {
+      const CHARACTER_RADIUS = 16;
+      const MIN_DISTANCE = CHARACTER_RADIUS * 2;
+      const BUMP_FORCE = 0.5;
+      
+      for (let i = 0; i < charactersInArena.length; i++) {
+        for (let j = i + 1; j < charactersInArena.length; j++) {
+          const a = charactersInArena[i];
+          const b = charactersInArena[j];
+          
+          if (a.isDead || b.isDead) continue;
+          
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < MIN_DISTANCE) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = MIN_DISTANCE - distance;
+            
+            // Push apart
+            const pushX = Math.cos(angle) * (overlap / 2);
+            const pushY = Math.sin(angle) * (overlap / 2);
+            a.x += pushX;
+            a.y += pushY;
+            b.x -= pushX;
+            b.y -= pushY;
+            
+            // Clamp positions
+            a.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, a.x));
+            a.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, a.y));
+            b.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, b.x));
+            b.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, b.y));
+            
+            // Apply bump force
+            a.vx = (a.vx + Math.cos(angle) * BUMP_FORCE) * 0.8;
+            a.vy = (a.vy + Math.sin(angle) * BUMP_FORCE) * 0.8;
+            b.vx = (b.vx - Math.cos(angle) * BUMP_FORCE) * 0.8;
+            b.vy = (b.vy - Math.sin(angle) * BUMP_FORCE) * 0.8;
+            
+            // Handle collision-based abilities (to be expanded per character)
+            if (a.team !== b.team) {
+              handleCharacterHit(a, b);
+              handleCharacterHit(b, a);
+            }
+          }
+        }
+      }
+    }
+
+    function handleCharacterHit(attacker, victim) {
+      // Basic collision damage - to be expanded per character
+      victim.takeDamage(1, attacker);
+      audio.hit();
+    }
+
+    // Game loop
+    const MAX_SPEED = 3;
+    const FRICTION = 0.98;
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      
+      gameTime++;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Update and draw characters
+      charactersInArena.forEach(c => {
+        if (!c.isDead) {
+          // Apply friction
+          c.vx *= FRICTION;
+          c.vy *= FRICTION;
+          
+          // Cap speed
+          const speed = Math.hypot(c.vx, c.vy);
+          if (speed > MAX_SPEED) {
+            const angle = Math.atan2(c.vy, c.vx);
+            c.vx = Math.cos(angle) * MAX_SPEED;
+            c.vy = Math.sin(angle) * MAX_SPEED;
+          }
+          
+          c.update();
+          c.draw(ctx);
+        }
+      });
+      
+      // Handle character collisions
+      handleCharacterCollisions();
+      
+      // Update HP displays
+      updateHPDisplays();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function checkWinCondition() {
+      const team1Alive = charactersInArena.filter(c => c.team === 1 && !c.isDead);
+      const team2Alive = charactersInArena.filter(c => c.team === 2 && !c.isDead);
+      
+      if (team1Alive.length === 0 || team2Alive.length === 0) {
+        gameRunning = false;
+        
+        const winner = team1Alive.length > 0 ? "🟢 Player 1" : "🔵 Player 2";
+        document.getElementById("winnerText").textContent = `${winner} Wins!`;
+        document.getElementById("gameOver").classList.add("show");
+      }
+    }
+
+    function resetGame() {
+      gameRunning = false;
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      document.getElementById('gameOver').classList.remove('show');
+      document.getElementById('characterSelect').style.display = 'flex';
+      document.getElementById('arenaContainer').style.display = 'none';
+      
+      selectedP1 = [];
+      selectedP2 = [];
+      updateDisplay();
+    }
+
+    // Initialize the game
+    createCharacterGrid("player1Chars", 1);
+    createCharacterGrid("player2Chars", 2);
+    updateDisplay();
+  </script>
+</body>
+</html>
