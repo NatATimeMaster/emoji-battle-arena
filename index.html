@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emoji Arena Battle</title>
+  <style>
+    :root {
+      --player1-color: #4ade80;
+      --player2-color: #60a5fa;
+      --bg-primary: #0f0f23;
+      --bg-secondary: #1a1a3a;
+      --text-primary: #ffffff;
+      --text-secondary: #a1a1aa;
+      --border-color: #374151;
+      --accent-color: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--text-primary);
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .overlay h2 {
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
+      margin-bottom: 2rem;
+      background: linear-gradient(45deg, var(--player1-color), var(--player2-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+    }
+
+    .team-select {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .team-select {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+    }
+
+    .team {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 1.5rem;
+      border: 2px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .team h3 {
+      text-align: center;
+      margin-bottom: 1rem;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+    }
+
+    .team:nth-child(1) {
+      border-color: var(--player1-color);
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.2);
+    }
+
+    .team:nth-child(2) {
+      border-color: var(--player2-color);
+      box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
+    }
+
+    .character-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+      gap: 8px;
+    }
+
+    .char-btn {
+      font-size: clamp(20px, 5vw, 28px);
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .char-btn:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .char-btn:active {
+      transform: scale(0.95);
+    }
+
+    .char-btn.selected-p1 {
+      background: var(--player1-color);
+      border-color: var(--player1-color);
+      box-shadow: 0 0 15px rgba(74, 222, 128, 0.5);
+      animation: pulse 2s infinite;
+    }
+
+    .char-btn.selected-p2 {
+      background: var(--player2-color);
+      border-color: var(--player2-color);
+      box-shadow: 0 0 15px rgba(96, 165, 250, 0.5);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .start-btn {
+      background: linear-gradient(45deg, var(--accent-color), #ef4444);
+      border: none;
+      padding: 1rem 2rem;
+      font-size: clamp(1rem, 3vw, 1.2rem);
+      color: white;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .start-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .arena-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+      gap: 0.5rem;
+    }
+
+    .info-header {
+      text-align: center;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(45deg, var(--player1-color), var(--player2-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hp-area {
+      display: flex;
+      justify-content: center;
+      gap: clamp(1rem, 5vw, 3rem);
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .team-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .character-status {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      max-width: 200px;
+    }
+
+    .hp-bar-container {
+      width: 100%;
+      position: relative;
+    }
+
+    .hp-bar {
+      background-color: #333;
+      height: 16px;
+      border-radius: 8px;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      border: 2px solid var(--border-color);
+    }
+
+    .hp-fill {
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+      height: 100%;
+      transition: width 0.3s ease;
+      border-radius: 6px;
+    }
+
+    .hp-shield {
+      background-color: #e5e7eb;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      right: 0;
+      border-radius: 6px;
+    }
+
+    .hp-fake {
+      background-color: #fbbf24;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px;
+    }
+
+    .character-label {
+      font-size: clamp(0.7rem, 2vw, 0.9rem);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-indicators {
+      display: flex;
+      gap: 4px;
+      font-size: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .status-indicator {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    canvas {
+      border: 3px solid var(--accent-color);
+      border-radius: 12px;
+      box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
+      max-width: calc(100vw - 2rem);
+      max-height: calc(100vh - 200px);
+      background: #000;
+    }
+
+    .game-over {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .game-over.show {
+      opacity: 1;
+    }
+
+    .game-over h2 {
+      font-size: clamp(2rem, 6vw, 4rem);
+      margin-bottom: 2rem;
+      background: linear-gradient(45deg, #ef4444, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .selection-info {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: var(--text-secondary);
+      font-size: clamp(0.8rem, 2vw, 1rem);
+    }
+
+    .death-animation {
+      position: absolute;
+      pointer-events: none;
+      font-size: 48px;
+      animation: deathPop 2s ease-out forwards;
+    }
+
+    @keyframes deathPop {
+      0% { transform: scale(1) rotate(0deg); opacity: 1; }
+      50% { transform: scale(2) rotate(180deg); opacity: 0.8; }
+      100% { transform: scale(0) rotate(360deg); opacity: 0; }
+    }
+
+    @keyframes hellsTrial {
+      0%, 100% { background-color: rgba(255, 0, 0, 0.1); }
+      50% { background-color: rgba(255, 0, 0, 0.3); }
+    }
+
+    .hells-trial {
+      animation: hellsTrial 1s infinite;
+    }
+
+    @media (max-width: 480px) {
+      .overlay {
+        padding: 0.5rem;
+      }
+      
+      .team {
+        padding: 1rem;
+      }
+      
+      .character-grid {
+        grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+        gap: 6px;
+      }
+      
+      .char-btn {
+        padding: 8px;
+        font-size: 20px;
+      }
+      
+      .hp-area {
+        gap: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="characterSelect">
+    <h2>⚔️ Emoji Arena Battle ⚔️</h2>
+    <div class="selection-info">
+      Select up to 5 characters per team
+    </div>
+    <div class="team-select">
+      <div class="team">
+        <h3>🟢 Player 1</h3>
+        <div class="character-grid" id="player1Chars"></div>
+        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.9rem;">
+          Selected: <span id="p1Count">0</span>/5
+        </div>
+      </div>
+      <div class="team">
+        <h3>🔵 Player 2</h3>
+        <div class="character-grid" id="player2Chars"></div>
+        <div style="text-align: center; margin-top: 0.5rem; font-size: 0.9rem;">
+          Selected: <span id="p2Count">0</span>/5
+        </div>
+      </div>
+    </div>
+    <button class="start-btn" onclick="startGame()" id="startBtn" disabled>Start Battle</button>
+  </div>
+
+  <div class="arena-container">
+    <div class="info-header" id="matchInfo"></div>
+    <div class="hp-area">
+      <div class="team-column" id="player1HP"></div>
+      <div class="team-column" id="player2HP"></div>
+    </div>
+    <canvas id="arena"></canvas>
+  </div>
+
+  <div class="game-over" id="gameOver">
+    <h2 id="winnerText"></h2>
+    <button class="start-btn" onclick="resetGame()">Play Again</button>
+  </div>
+
+  <script>
+    // Character definitions with abilities
+    const characters = [
+      { emoji: "😈", name: "Demonlord" },
+      { emoji: "👽", name: "Terestro" },
+      { emoji: "👾", name: "Gamemaster" },
+      { emoji: "💀", name: "Deathblow" },
+      { emoji: "🤡", name: "Mimic" },
+      { emoji: "🎃", name: "Tricker" },
+      { emoji: "👹", name: "Grinch" },
+      { emoji: "👼🏻", name: "Angerus" },
+      { emoji: "🤵🏻", name: "Magico" },
+      { emoji: "🐯", name: "Clawhard" },
+      { emoji: "🦁", name: "Kingstone" },
+      { emoji: "🐺", name: "Moonhowl" },
+      { emoji: "🐻‍❄️", name: "Antarticus" },
+      { emoji: "🐼", name: "Black Spot" },
+      { emoji: "🦊", name: "Frenzy" },
+      { emoji: "🐰", name: "Hopper" }
+    ];
+
+    let selectedP1 = [], selectedP2 = [];
+    let ctx, canvas;
+    let charactersInArena = [];
+    let projectiles = [];
+    let gameRunning = false;
+    let gameTime = 0;
+    let soundEnabled = true;
+
+    // Audio system
+    class AudioManager {
+      constructor() {
+        this.sounds = {};
+        this.createSounds();
+      }
+
+      createSounds() {
+        // Create simple beep sounds using Web Audio API
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      playSound(type, frequency = 440, duration = 0.1) {
+        if (!soundEnabled || !this.audioContext) return;
+        
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+        
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration);
+      }
+
+      shoot() { this.playSound('shoot', 660, 0.1); }
+      hit() { this.playSound('hit', 880, 0.15); }
+      bounce() { this.playSound('bounce', 220, 0.1); }
+      death() { this.playSound('death', 110, 0.5); }
+      ability() { this.playSound('ability', 1100, 0.2); }
+    }
+
+    const audio = new AudioManager();
+
+    // Projectile class
+    class Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type = 'basic', data = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.emoji = emoji;
+        this.damage = damage;
+        this.owner = owner;
+        this.type = type;
+        this.data = { ...data };
+        this.bounces = 0;
+        this.maxBounces = data.maxBounces || Infinity;
+        this.lifetime = data.lifetime || Infinity;
+        this.age = 0;
+        this.size = data.size || 16;
+        this.canHitOwner = data.canHitOwner || false;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        // Lifetime check
+        if (this.age > this.lifetime) {
+          return false; // Mark for removal
+        }
+
+        // Border collision
+        const margin = this.size;
+        let bounced = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          bounced = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          bounced = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          bounced = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          bounced = true;
+        }
+
+        if (bounced) {
+          this.bounces++;
+          audio.bounce();
+          
+          // Handle specific projectile bounce behaviors
+          this.handleBounce();
+          
+          if (this.bounces > this.maxBounces) {
+            return false; // Mark for removal
+          }
+        }
+
+        return true; // Continue existing
+      }
+
+      handleBounce() {
+        // Override in specific implementations
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+
+      checkCollision(character) {
+        const dx = this.x - character.x;
+        const dy = this.y - character.y;
+        const distance = Math.hypot(dx, dy);
+        return distance < (this.size + character.size);
+      }
+    }
+
+    // Enhanced Character class
+    class ArenaCharacter {
+      constructor(emoji, name, x, y, team) {
+        this.emoji = emoji;
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() * 2 - 1) * 2;
+        this.vy = (Math.random() * 2 - 1) * 2;
+        this.angle = 0;
+        this.team = team;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.fakeHp = 0;
+        this.shield = 0;
+        this.size = 16;
+        this.lastAbilityTime = 0;
+        this.statusEffects = new Map();
+        this.abilityData = {};
+        this.isDead = false;
+        this.frozen = false;
+        this.frozenUntil = 0;
+        this.invulnerable = false;
+        this.invulnerableUntil = 0;
+
+        // Initialize character-specific data
+        this.initializeAbilities();
+      }
+
+      initializeAbilities() {
+        switch(this.emoji) {
+          case "😈": // Demonlord
+            this.abilityData = {
+              hellsTrialCount: 0,
+              borderHits: new Set(),
+              lastFireTime: 0
+            };
+            break;
+          case "👽": // Terestro
+            this.abilityData = {
+              lastBlinkTime: 0,
+              enhancedStarHits: 0,
+              overloadActive: false
+            };
+            break;
+          case "👾": // Gamemaster
+            this.abilityData = {
+              coinsCollected: 0,
+              gameBusterActive: false
+            };
+            break;
+          case "💀": // Deathblow
+            this.abilityData = {
+              enemyHits: 0,
+              dangerSkulls: []
+            };
+            break;
+          case "🤡": // Mimic
+            this.abilityData = {
+              ballBounces: 0,
+              mimicking: false,
+              mimicUntil: 0,
+              lastMimicTime: 0
+            };
+            break;
+          case "🎃": // Tricker
+            this.abilityData = {
+              webs: [],
+              clonePosition: null,
+              bounceCount: 0
+            };
+            break;
+          case "👹": // Grinch
+            this.abilityData = {
+              bloodDrops: [],
+              bloodCollected: 0
+            };
+            break;
+          case "👼🏻": // Angerus
+            this.abilityData = {
+              phase: 'black',
+              blockIndex: 0,
+              consecutiveDamage: 0,
+              lastDamageTime: 0
+            };
+            break;
+          case "🤵🏻": // Magico
+            this.abilityData = {
+              cardIndex: 0
+            };
+            break;
+          case "🐯": // Clawhard
+            this.abilityData = {
+              windslashCount: 1,
+              enemyHits: 0
+            };
+            break;
+          case "🦁": // Kingstone
+            this.abilityData = {
+              pride: [],
+              enemyHits: 0
+            };
+            break;
+          case "🐺": // Moonhowl
+            this.abilityData = {
+              moonHits: 0,
+              fullMoonActive: false,
+              wolfsenseActive: false
+            };
+            break;
+          case "🐻‍❄️": // Antarticus
+            this.abilityData = {
+              frozenHits: 0
+            };
+            break;
+          case "🐼": // Black Spot
+            this.abilityData = {
+              leaves: [],
+              hitCount: 0,
+              boostMode: false,
+              boostUntil: 0
+            };
+            break;
+          case "🦊": // Frenzy
+            this.abilityData = {
+              speedStacks: 0
+            };
+            break;
+          case "🐰": // Hopper
+            this.abilityData = {
+              charging: false,
+              chargeUntil: 0,
+              lastJumpDistance: 0
+            };
+            break;
+        }
+      }
+
+      update() {
+        if (this.isDead) return;
+
+        // Handle frozen state
+        if (this.frozen && gameTime < this.frozenUntil) {
+          return; // Don't move when frozen
+        } else {
+          this.frozen = false;
+        }
+
+        // Handle invulnerability
+        if (this.invulnerable && gameTime < this.invulnerableUntil) {
+          // Still invulnerable
+        } else {
+          this.invulnerable = false;
+        }
+
+        // Character-specific movement and behavior
+        this.handleMovement();
+        this.handleAbilities();
+        this.updateStatusEffects();
+      }
+
+      handleMovement() {
+        // Special movement for specific characters
+        if (this.emoji === "🐰" && this.abilityData.charging) {
+          // Hopper doesn't move while charging
+          return;
+        }
+
+        // Apply movement modifiers
+        let speedMultiplier = 1;
+        
+        if (this.emoji === "🦊") {
+          speedMultiplier += this.abilityData.speedStacks * 0.2;
+        }
+
+        if (this.emoji === "🐼" && this.abilityData.boostMode && gameTime < this.abilityData.boostUntil) {
+          speedMultiplier *= 5;
+        }
+
+        this.x += this.vx * speedMultiplier;
+        this.y += this.vy * speedMultiplier;
+
+        // Wall collision
+        const r = this.size;
+        if (this.x < r) {
+          this.x = r;
+          this.vx *= -1;
+          this.handleWallCollision();
+        } else if (this.x > canvas.width - r) {
+          this.x = canvas.width - r;
+          this.vx *= -1;
+          this.handleWallCollision();
+        }
+
+        if (this.y < r) {
+          this.y = r;
+          this.vy *= -1;
+          this.handleWallCollision();
+        } else if (this.y > canvas.height - r) {
+          this.y = canvas.height - r;
+          this.vy *= -1;
+          this.handleWallCollision();
+        }
+
+        this.angle += 0.05;
+      }
+
+      handleWallCollision() {
+        // Special wall collision behaviors
+        if (this.emoji === "💀") { // Deathblow
+          this.spawnDangerSkull();
+        }
+        
+        if (this.emoji === "🎃") { // Tricker
+          this.abilityData.bounceCount++;
+          if (this.abilityData.bounceCount === 1 && !this.abilityData.clonePosition) {
+            this.abilityData.clonePosition = { x: this.x, y: this.y };
+          }
+          if (this.abilityData.bounceCount % 3 === 0 && this.abilityData.clonePosition) {
+            // Swap with clone
+            const temp = { x: this.x, y: this.y };
+            this.x = this.abilityData.clonePosition.x;
+            this.y = this.abilityData.clonePosition.y;
+            this.abilityData.clonePosition = temp;
+          }
+        }
+      }
+
+      handleAbilities() {
+        const currentTime = gameTime;
+        
+        switch(this.emoji) {
+          case "😈": // Demonlord
+            if (currentTime - this.lastAbilityTime > 180) { // 3 seconds
+              this.fireFire();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "👽": // Terestro
+            if (currentTime - this.lastAbilityTime > 180) {
+              this.shootStars();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "👾": // Gamemaster
+            if (currentTime - this.lastAbilityTime > 180) {
+              this.fireCoin();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🤡": // Mimic
+            if (!this.hasActiveBall() && !this.abilityData.mimicking) {
+              this.throwRedBall();
+            }
+            break;
+            
+          case "🎃": // Tricker
+            if (!this.hasActiveBat()) {
+              this.spawnBat();
+            }
+            this.updateWebs();
+            break;
+            
+          case "👹": // Grinch
+            if (currentTime - this.lastAbilityTime > 360) { // 6 seconds (or 3 if boosted)
+              const cooldown = this.abilityData.bloodCollected >= 10 ? 180 : 360;
+              if (currentTime - this.lastAbilityTime > cooldown) {
+                this.throwBoulder();
+                this.lastAbilityTime = currentTime;
+              }
+            }
+            break;
+            
+          case "👼🏻": // Angerus
+            if (currentTime - this.lastAbilityTime > 120) { // 2 seconds between blocks
+              this.fireBlockSequence();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🤵🏻": // Magico
+            if (currentTime - this.lastAbilityTime > 240) { // 4 seconds for full sequence
+              this.throwCards();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐯": // Clawhard
+            const clawCooldown = this.getClawhardCooldown();
+            if (currentTime - this.lastAbilityTime > clawCooldown) {
+              this.shootWindslash();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐺": // Moonhowl
+            if (currentTime - this.lastAbilityTime > 120) {
+              this.shootMoon();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐻‍❄️": // Antarticus
+            if (currentTime - this.lastAbilityTime > 180) {
+              this.shootFrozeflake();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐼": // Black Spot
+            if (currentTime % 300 === 0) { // Every 5 seconds
+              this.dropLeaf();
+            }
+            break;
+        }
+      }
+
+      // Ability implementations
+      fireFire() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const fire = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔥", 1, this, "fire",
+          { borderHits: new Set(), hellsTrial: this.abilityData.hellsTrialCount }
+        );
+        
+        projectiles.push(fire);
+        audio.shoot();
+      }
+
+      shootStars() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.5;
+            const speed = 3;
+            const isEnhanced = i === 3;
+            
+            const star = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              isEnhanced ? "🌟" : "⭐", isEnhanced ? 2 : 1,
+              this, "star", { enhanced: isEnhanced }
+            );
+            
+            projectiles.push(star);
+            audio.shoot();
+          }, i * 100);
+        }
+      }
+
+      fireCoin() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2.5;
+        
+        const coin = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🪙", 1, this, "coin",
+          { maxBounces: 3, directHit: false }
+        );
+        
+        projectiles.push(coin);
+        audio.shoot();
+      }
+
+      throwRedBall() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2;
+        
+        const ball = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔴", 1, this, "redBall",
+          { bounces: 0, maxBounces: 10 }
+        );
+        
+        projectiles.push(ball);
+        audio.shoot();
+      }
+
+      spawnBat() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2;
+        
+        const bat = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🦇", 1, this, "bat",
+          { lifetime: Infinity }
+        );
+        
+        projectiles.push(bat);
+        audio.shoot();
+      }
+
+      throwBoulder() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2;
+        
+        const boulder = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🪨", 8, this, "giantBoulder",
+          { size: this.size * 2, splits: 0 }
+        );
+        
+        projectiles.push(boulder);
+        audio.shoot();
+      }
+
+      fireBlockSequence() {
+        const blocks = this.abilityData.phase === 'black' 
+          ? ["▪️", "◾", "◼️"] 
+          : ["▫️", "◽", "◻️"];
+        const damages = [1, 2, 4];
+        
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const block = blocks[this.abilityData.blockIndex];
+        const damage = damages[this.abilityData.blockIndex];
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const projectile = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          block, damage, this, "angelBlock",
+          { phase: this.abilityData.phase, index: this.abilityData.blockIndex }
+        );
+        
+        projectiles.push(projectile);
+        audio.shoot();
+        
+        this.abilityData.blockIndex++;
+        if (this.abilityData.blockIndex >= 3) {
+          this.abilityData.blockIndex = 0;
+          this.abilityData.phase = this.abilityData.phase === 'black' ? 'white' : 'black';
+        }
+      }
+
+      throwCards() {
+        const cards = ["♥️", "♠️", "♣️", "♦️"];
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
+            const speed = 3;
+            
+            const card = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              cards[i], 1, this, "card",
+              { cardType: cards[i] }
+            );
+            
+            projectiles.push(card);
+            audio.shoot();
+          }, i * 200);
+        }
+      }
+
+      shootWindslash() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < this.abilityData.windslashCount; i++) {
+          const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (i - this.abilityData.windslashCount/2) * 0.2;
+          const speed = 4;
+          
+          const damage = this.hp <= this.maxHp * 0.1 ? 2 : 1;
+          const lifesteal = this.hp <= this.maxHp * 0.1;
+          
+          const windslash = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            "🌀", damage, this, "windslash",
+            { lifesteal: lifesteal }
+          );
+          
+          projectiles.push(windslash);
+        }
+        audio.shoot();
+      }
+
+      shootMoon() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2.5;
+        
+        const moon = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🌙", 1, this, "moon"
+        );
+        
+        projectiles.push(moon);
+        audio.shoot();
+      }
+
+      shootFrozeflake() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2;
+        
+        const frozeflake = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "❄️", 1, this, "frozeflake",
+          { maxBounces: 5 }
+        );
+        
+        projectiles.push(frozeflake);
+        audio.shoot();
+      }
+
+      dropLeaf() {
+        this.abilityData.leaves.push({
+          x: this.x,
+          y: this.y,
+          age: 0
+        });
+      }
+
+      spawnDangerSkull() {
+        if (this.abilityData.dangerSkulls.length < this.abilityData.enemyHits) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1.5;
+          
+          const skull = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            "☠️", 1, this, "dangerSkull",
+            { lifetime: 600 } // 10 seconds
+          );
+          
+          projectiles.push(skull);
+          this.abilityData.dangerSkulls.push(skull);
+        }
+      }
+
+      // Helper methods
+      getNearestEnemy() {
+        return charactersInArena.find(c => c.team !== this.team && !c.isDead);
+      }
+
+      hasActiveBall() {
+        return projectiles.some(p => p.owner === this && p.type === "redBall");
+      }
+
+      hasActiveBat() {
+        return projectiles.some(p => p.owner === this && p.type === "bat");
+      }
+
+      getClawhardCooldown() {
+        if (this.hp <= this.maxHp * 0.1) return 15; // 0.25 seconds
+        if (this.hp <= this.maxHp * 0.25) return 30; // 0.5 seconds  
+        if (this.hp <= this.maxHp * 0.5) return 60; // 1 second
+        return 120; // 2 seconds
+      }
+
+      updateStatusEffects() {
+        // Update status effects
+        this.statusEffects.forEach((effect, key) => {
+          if (effect.duration <= 0) {
+            this.statusEffects.delete(key);
+          } else {
+            effect.duration--;
+            if (effect.onTick) effect.onTick(this);
+          }
+        });
+      }
+
+      takeDamage(amount, source = null) {
+        if (this.isDead || this.invulnerable) return false;
+        
+        // Handle consecutive damage for Angerus
+        if (this.emoji === "👼🏻") {
+          const now = gameTime;
+          if (now - this.abilityData.lastDamageTime <= 60) { // Within 1 second
+            this.abilityData.consecutiveDamage++;
+          } else {
+            this.abilityData.consecutiveDamage = 1;
+          }
+          this.abilityData.lastDamageTime = now;
+          
+          if (this.abilityData.consecutiveDamage >= 20) {
+            this.hp = this.maxHp; // Full heal
+            this.abilityData.consecutiveDamage = 0;
+            return true;
+          }
+        }
+        
+        // Apply damage to fake HP first, then real HP
+        if (this.fakeHp > 0) {
+          const fakeReduction = Math.min(this.fakeHp, amount);
+          this.fakeHp -= fakeReduction;
+          amount -= fakeReduction;
+        }
+        
+        if (amount > 0) {
+          this.hp -= amount;
+          if (this.hp <= 0) {
+            this.hp = 0;
+            this.die();
+          }
+        }
+        
+        // Handle character-specific damage responses
+        if (source && source.emoji === "🦊") { // Frenzy hit
+          source.abilityData.speedStacks++;
+        }
+        
+        if (this.emoji === "🐼") { // Black Spot hit
+          this.abilityData.hitCount++;
+          if (this.abilityData.hitCount >= 5) {
+            this.activateBoostMode();
+            this.abilityData.hitCount = 0;
+          }
+        }
+        
+        return true;
+      }
+
+      heal(amount) {
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+      }
+
+      addFakeHp(amount) {
+        this.fakeHp = Math.min(this.maxHp - this.hp, this.fakeHp + amount);
+      }
+
+      freeze(duration) {
+        this.frozen = true;
+        this.frozenUntil = gameTime + duration;
+      }
+
+      die() {
+        this.isDead = true;
+        audio.death();
+        
+        // Create death animation
+        const deathAnim = document.createElement('div');
+        deathAnim.className = 'death-animation';
+        deathAnim.textContent = this.emoji;
+        deathAnim.style.left = `${this.x}px`;
+        deathAnim.style.top = `${this.y}px`;
+        document.body.appendChild(deathAnim);
+        
+        setTimeout(() => {
+          deathAnim.remove();
+        }, 2000);
+        
+        // Check win condition
+        setTimeout(() => {
+          checkWinCondition();
+        }, 3000);
+      }
+
+      activateBoostMode() {
+        // Collect all leaves
+        this.abilityData.leaves.forEach(leaf => {
+          this.heal(5);
+        });
+        this.abilityData.leaves = [];
+        
+        // Activate boost
+        this.abilityData.boostMode = true;
+        this.abilityData.boostUntil = gameTime + 480; // 8 seconds
+        this.invulnerable = true;
+        this.invulnerableUntil = gameTime + 480;
+      }
+
+      draw(ctx) {
+        if (this.isDead) return;
+        
+        ctx.save();
+        
+        // Glow effect for special states
+        if (this.invulnerable) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 10;
+        }
+        
+        if (this.frozen) {
+          ctx.shadowColor = "#00ffff";
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.font = "32px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Flash effect when taking damage
+        if (this.statusEffects.has('damage')) {
+          ctx.globalAlpha = 0.7;
+        }
+        
+        ctx.fillText(this.emoji, 0, 0);
+        
+        // Draw clone for Tricker
+        if (this.emoji === "🎃" && this.abilityData.clonePosition) {
+          ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = 0.3;
+          ctx.translate(this.abilityData.clonePosition.x, this.abilityData.clonePosition.y);
+          ctx.font = "32px serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(this.emoji, 0, 0);
+        }
+        
+        ctx.restore();
+        
+        // Draw leaves for Black Spot
+        if (this.emoji === "🐼") {
+          this.abilityData.leaves.forEach(leaf => {
+            ctx.font = "16px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🌿", leaf.x, leaf.y);
+          });
+        }
+        
+        // Draw webs for Tricker
+        if (this.emoji === "🎃") {
+          this.abilityData.webs.forEach(web => {
+            ctx.font = "20px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🕸️", web.x, web.y);
+          });
+        }
+      }
+    }
+
+    function createCharacterGrid(id, team) {
+      const container = document.getElementById(id);
+      container.innerHTML = "";
+      
+      characters.forEach(char => {
+        const btn = document.createElement("button");
+        btn.classList.add("char-btn");
+        btn.textContent = char.emoji;
+        btn.title = char.name;
+        btn.onclick = () => {
+          if (team === 1 && selectedP1.includes(char)) {
+            selectedP1 = selectedP1.filter(c => c !== char);
+          } else if (team === 2 && selectedP2.includes(char)) {
+            selectedP2 = selectedP2.filter(c => c !== char);
+          } else {
+            if (team === 1 && selectedP1.length < 5 && !selectedP2.includes(char)) {
+              selectedP1.push(char);
+            }
+            if (team === 2 && selectedP2.length < 5 && !selectedP1.includes(char)) {
+              selectedP2.push(char);
+            }
+          }
+          updateHighlights();
+          updateCounts();
+          updateStartButton();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function updateHighlights() {
+      document.querySelectorAll(".char-btn").forEach(btn => {
+        btn.classList.remove("selected-p1", "selected-p2");
+        const char = characters.find(c => c.emoji === btn.textContent);
+        if (selectedP1.includes(char)) btn.classList.add("selected-p1");
+        if (selectedP2.includes(char)) btn.classList.add("selected-p2");
+      });
+    }
+
+    function updateCounts() {
+      document.getElementById("p1Count").textContent = selectedP1.length;
+      document.getElementById("p2Count").textContent = selectedP2.length;
+    }
+
+    function updateStartButton() {
+      const startBtn = document.getElementById("startBtn");
+      const canStart = selectedP1.length > 0 && selectedP2.length > 0;
+      startBtn.disabled = !canStart;
+    }
+
+    function startGame() {
+      if (selectedP1.length === 0 || selectedP2.length === 0) return;
+      
+      document.getElementById("characterSelect").style.display = "none";
+      
+      // Initialize audio context
+      if (audio.audioContext.state === 'suspended') {
+        audio.audioContext.resume();
+      }
+      
+      const info = selectedP1.length > 1 || selectedP2.length > 1 ?
+        `Team 1 (${selectedP1.length}) vs Team 2 (${selectedP2.length})` : 
+        `${selectedP1[0].emoji} VS ${selectedP2[0].emoji}`;
+      document.getElementById("matchInfo").textContent = info;
+      
+      // Create HP displays
+      createHPDisplays();
+      
+      // Initialize canvas
+      canvas = document.getElementById("arena");
+      canvas.width = Math.min(window.innerWidth * 0.9, 1000);
+      canvas.height = Math.min(window.innerHeight * 0.6, 600);
+      ctx = canvas.getContext("2d");
+      
+      // Create characters
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      // Position team 1
+      const gapX1 = canvas.width / (selectedP1.length + 1);
+      selectedP1.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX1 * (i + 1), canvas.height * 0.2, 1
+        ));
+      });
+      
+      // Position team 2
+      const gapX2 = canvas.width / (selectedP2.length + 1);
+      selectedP2.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX2 * (i + 1), canvas.height * 0.8, 2
+        ));
+      });
+      
+      gameRunning = true;
+      requestAnimationFrame(gameLoop);
+    }
+
+    function createHPDisplays() {
+      const hp1 = document.getElementById("player1HP");
+      const hp2 = document.getElementById("player2HP");
+      hp1.innerHTML = "";
+      hp2.innerHTML = "";
+      
+      selectedP1.forEach(char => {
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'character-status';
+        statusDiv.innerHTML = `
+          <div class="character-label">${char.emoji} ${char.name}</div>
+          <div class="hp-bar-container">
+            <div class="hp-bar">
+              <div class="hp-fill" style="width: 100%"></div>
+              <div class="hp-fake" style="width: 0%"></div>
+              <div class="hp-shield" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="status-indicators"></div>
+        `;
+        hp1.appendChild(statusDiv);
+      });
+      
+      selectedP2.forEach(char => {
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'character-status';
+        statusDiv.innerHTML = `
+          <div class="character-label">${char.emoji} ${char.name}</div>
+          <div class="hp-bar-container">
+            <div class="hp-bar">
+              <div class="hp-fill" style="width: 100%"></div>
+              <div class="hp-fake" style="width: 0%"></div>
+              <div class="hp-shield" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="status-indicators"></div>
+        `;
+        hp2.appendChild(statusDiv);
+      });
+    }
+
+    function updateHPDisplays() {
+      const hp1Elements = document.querySelectorAll("#player1HP .character-status");
+      const hp2Elements = document.querySelectorAll("#player2HP .character-status");
+      
+      selectedP1.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 1);
+        if (character && hp1Elements[i]) {
+          updateCharacterStatus(hp1Elements[i], character);
+        }
+      });
+      
+      selectedP2.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 2);
+        if (character && hp2Elements[i]) {
+          updateCharacterStatus(hp2Elements[i], character);
+        }
+      });
+    }
+
+    function updateCharacterStatus(element, character) {
+      const hpFill = element.querySelector('.hp-fill');
+      const hpFake = element.querySelector('.hp-fake');
+      const hpShield = element.querySelector('.hp-shield');
+      const statusIndicators = element.querySelector('.status-indicators');
+      
+      const hpPercentage = (character.hp / character.maxHp) * 100;
+      const fakePercentage = (character.fakeHp / character.maxHp) * 100;
+      const shieldPercentage = (character.shield / character.maxHp) * 100;
+      
+      hpFill.style.width = `${hpPercentage}%`;
+      hpFake.style.width = `${fakePercentage}%`;
+      hpShield.style.width = `${shieldPercentage}%`;
+      
+      // Update status indicators
+      statusIndicators.innerHTML = "";
+      
+      if (character.frozen) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '❄️';
+        indicator.title = 'Frozen';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.invulnerable) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '🛡️';
+        indicator.title = 'Invulnerable';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.abilityData.boostMode) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '⚡';
+        indicator.title = 'Boost Mode';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.isDead) {
+        element.style.opacity = '0.3';
+      }
+    }
+
+    const MAX_SPEED = 3;
+    const BUMP_FORCE = 0.5;
+    const FRICTION = 0.98;
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      
+      gameTime++;
+      
+      // Clear canvas with Hell's Trial effect
+      const isHellsTrialActive = charactersInArena.some(c => 
+        c.emoji === "😈" && c.abilityData.hellsTrialCount > 0
+      );
+      
+      if (isHellsTrialActive) {
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + Math.sin(gameTime * 0.1) * 0.05})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      // Update and draw characters
+      charactersInArena.forEach(c => {
+        if (!c.isDead) {
+          // Apply friction
+          c.vx *= FRICTION;
+          c.vy *= FRICTION;
+          
+          // Cap speed
+          const speed = Math.hypot(c.vx, c.vy);
+          if (speed > MAX_SPEED) {
+            const angle = Math.atan2(c.vy, c.vx);
+            c.vx = Math.cos(angle) * MAX_SPEED;
+            c.vy = Math.sin(angle) * MAX_SPEED;
+          }
+          
+          c.update();
+          c.draw(ctx);
+        }
+      });
+      
+      // Update projectiles
+      projectiles = projectiles.filter(p => {
+        if (!p.update()) return false;
+        
+        // Check collision with characters
+        charactersInArena.forEach(char => {
+          if (char.isDead || char === p.owner) return;
+          if (p.checkCollision(char)) {
+            handleProjectileHit(p, char);
+          }
+        });
+        
+        p.draw(ctx);
+        return true;
+      });
+      
+      // Handle character collisions
+      handleCharacterCollisions();
+      
+      // Update HP displays
+      updateHPDisplays();
+      
+      // Hell's Trial damage
+      if (isHellsTrialActive) {
+        if (gameTime % 60 === 0) { // Every second
+          charactersInArena.forEach(c => {
+            if (c.emoji !== "😈" && !c.isDead) {
+              const demonlord = charactersInArena.find(d => d.emoji === "😈" && d.team !== c.team);
+              if (demonlord) {
+                const damage = demonlord.abilityData.hellsTrialCount >= 2 ? 2 : 1;
+                c.takeDamage(damage);
+              }
+            }
+          });
+        }
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function handleCharacterCollisions() {
+      const CHARACTER_RADIUS = 16;
+      const MIN_DISTANCE = CHARACTER_RADIUS * 2;
+      
+      for (let i = 0; i < charactersInArena.length; i++) {
+        for (let j = i + 1; j < charactersInArena.length; j++) {
+          const a = charactersInArena[i];
+          const b = charactersInArena[j];
+          
+          if (a.isDead || b.isDead) continue;
+          
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < MIN_DISTANCE) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = MIN_DISTANCE - distance;
+            
+            // Push apart
+            const pushX = Math.cos(angle) * (overlap / 2);
+            const pushY = Math.sin(angle) * (overlap / 2);
+            a.x += pushX;
+            a.y += pushY;
+            b.x -= pushX;
+            b.y -= pushY;
+            
+            // Clamp positions
+            a.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, a.x));
+            a.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, a.y));
+            b.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, b.x));
+            b.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, b.y));
+            
+            // Apply bump force
+            a.vx = (a.vx + Math.cos(angle) * BUMP_FORCE) * 0.8;
+            a.vy = (a.vy + Math.sin(angle) * BUMP_FORCE) * 0.8;
+            b.vx = (b.vx - Math.cos(angle) * BUMP_FORCE) * 0.8;
+            b.vy = (b.vy - Math.sin(angle) * BUMP_FORCE) * 0.8;
+            
+            // Handle collision-based abilities
+            if (a.team !== b.team) {
+              handleCharacterHit(a, b);
+              handleCharacterHit(b, a);
+            }
+          }
+        }
+      }
+    }
+
+    function handleCharacterHit(attacker, victim) {
+      if (victim.isDead || victim.invulnerable) return;
+      
+      let damage = 1;
+      
+      // Character-specific damage calculations
+      if (attacker.emoji === "💀") { // Deathblow
+        damage = 3;
+        attacker.abilityData.enemyHits++;
+      } else if (attacker.emoji === "🦁") { // Kingstone
+        damage = 1 + attacker.abilityData.pride.length;
+        attacker.abilityData.enemyHits++;
+        // Spawn Leo
+        const leo = new Projectile(
+          attacker.x, attacker.y,
+          (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2,
+          "♌", 0, attacker, "leo"
+        );
+        projectiles.push(leo);
+      } else if (attacker.emoji === "🦊") { // Frenzy
+        damage = Math.pow(2, Math.floor(attacker.abilityData.speedStacks / 5));
+        attacker.abilityData.speedStacks++;
+      } else if (attacker.emoji === "🐰") { // Hopper
+        damage = calculateHopperDamage(attacker, victim, true);
+        // Start charging phase
+        attacker.abilityData.charging = true;
+        attacker.abilityData.chargeUntil = gameTime + 180; // 3 seconds
+      }
+      
+      victim.takeDamage(damage, attacker);
+      audio.hit();
+    }
+
+    function calculateHopperDamage(hopper, victim, isDirect) {
+      // Simplified distance calculation based on arena size
+      const distance = hopper.abilityData.lastJumpDistance || canvas.width;
+      
+      if (distance >= canvas.width * 0.8) { // Long jump
+        return isDirect ? 8 : 6;
+      } else if (distance >= canvas.width * 0.4) { // Medium jump
+        return isDirect ? 5 : 3;
+      } else { // Short jump
+        return isDirect ? 2 : 1;
+      }
+    }
+
+    function handleProjectileHit(projectile, character) {
+      if (character.isDead || character.invulnerable) return;
+      if (projectile.owner === character && !projectile.canHitOwner) return;
+      
+      let damage = projectile.damage;
+      let removeProjectile = true;
+      
+      // Handle specific projectile types
+      switch(projectile.type) {
+        case "fire":
+          // Demonlord fire
+          character.takeDamage(damage * (projectile.data.hellsTrial || 1));
+          // Add burn effect
+          setTimeout(() => {
+            if (!character.isDead) {
+              character.takeDamage(1);
+            }
+          }, 1000);
+          break;
+          
+        case "star":
+          if (projectile.data.enhanced) {
+            projectile.owner.abilityData.enhancedStarHits++;
+            if (projectile.owner.abilityData.enhancedStarHits >= 3) {
+              // Trigger Galactic Overload
+              projectile.owner.abilityData.overloadActive = true;
+              projectile.owner.abilityData.enhancedStarHits = 0;
+            }
+          }
+          character.takeDamage(damage);
+          break;
+          
+        case "coin":
+          if (!projectile.data.directHit) {
+            projectile.data.directHit = true;
+            damage = 2; // Jackpot Strike
+            projectile.owner.heal(1);
+          }
+          character.takeDamage(damage);
+          break;
+          
+        case "redBall":
+          projectile.data.bounces++;
+          if (projectile.data.bounces >= 10) {
+            damage = 5; // 10th Impact
+            removeProjectile = true;
+          } else {
+            removeProjectile = false;
+          }
+          character.takeDamage(damage);
+          
+          // Greatest Mimicry
+          if (projectile.owner.emoji === "🤡" && !projectile.owner.abilityData.mimicking) {
+            const now = gameTime;
+            if (now - projectile.owner.abilityData.lastMimicTime > 600) { // 10 second cooldown
+              projectile.owner.abilityData.mimicking = true;
+              projectile.owner.abilityData.mimicUntil = now + 300; // 5 seconds
+              projectile.owner.abilityData.lastMimicTime = now;
+              projectile.owner.emoji = character.emoji; // Transform
+            }
+          }
+          break;
+          
+        case "windslash":
+          character.takeDamage(damage);
+          if (projectile.data.lifesteal) {
+            projectile.owner.heal(1);
+          }
+          projectile.owner.abilityData.enemyHits++;
+          if (projectile.owner.abilityData.enemyHits % 3 === 0) {
+            projectile.owner.abilityData.windslashCount++;
+          }
+          break;
+          
+        case "moon":
+          character.takeDamage(damage);
+          projectile.owner.abilityData.moonHits++;
+          if (projectile.owner.abilityData.moonHits >= 3) {
+            // Trigger Full Moon
+            projectiles = projectiles.filter(p => p.type !== "moon"); // Remove all moons
+            const fullMoon = new Projectile(
+              projectile.owner.x, projectile.owner.y,
+              (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4,
+              "🌕", 8, projectile.owner, "fullMoon"
+            );
+            projectiles.push(fullMoon);
+            projectile.owner.abilityData.moonHits = 0;
+          }
+          break;
+          
+        case "frozeflake":
+          if (!character.frozen) {
+            const freezeDuration = (projectile.owner.abilityData.frozenHits + 1) * 180 + 120; // 3+ seconds
+            character.freeze(freezeDuration);
+            projectile.owner.abilityData.frozenHits++;
+            
+            // Check for Polar Execution
+            if (projectile.owner.abilityData.frozenHits >= 10) {
+              // Charge at enemy
+              const angle = Math.atan2(character.y - projectile.owner.y, character.x - projectile.owner.x);
+              projectile.owner.vx = Math.cos(angle) * 5;
+              projectile.owner.vy = Math.sin(angle) * 5;
+              character.takeDamage(10);
+              projectile.owner.abilityData.frozenHits = 0;
+            }
+          } else {
+            removeProjectile = false; // Bounce off frozen enemy
+          }
+          break;
+      }
+      
+      if (removeProjectile) {
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+      }
+      
+      audio.hit();
+    }
+
+    function checkWinCondition() {
+      const team1Alive = charactersInArena.filter(c => c.team === 1 && !c.isDead);
+      const team2Alive = charactersInArena.filter(c => c.team === 2 && !c.isDead);
+      
+      if (team1Alive.length === 0 || team2Alive.length === 0) {
+        gameRunning = false;
+        
+        const winner = team1Alive.length > 0 ? "Player 1" : "Player 2";
+        document.getElementById("winnerText").textContent = `${winner} Wins!`;
+        
+        setTimeout(() => {
+          document.getElementById("gameOver").classList.add("show");
+        }, 2000);
+      }
+    }
+
+    function resetGame() {
+      gameRunning = false;
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      document.getElementById("gameOver").classList.remove("show");
+      document.getElementById("characterSelect").style.display = "flex";
+      
+      // Reset selections
+      selectedP1 = [];
+      selectedP2 = [];
+      updateHighlights();
+      updateCounts();
+      updateStartButton();
+    }
+
+    // Initialize
+    createCharacterGrid("player1Chars", 1);
+    createCharacterGrid("player2Chars", 2);
+    updateCounts();
+    updateStartButton();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      if (canvas && gameRunning) {
+        canvas.width = Math.min(window.innerWidth * 0.9, 1000);
+        canvas.height = Math.min(window.innerHeight * 0.6, 600);
+      }
+    });
+  </script>
+</body>
+</html>
