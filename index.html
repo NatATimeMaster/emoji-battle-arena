@@ -357,6 +357,7 @@
       max-height: 65vh;
       background: radial-gradient(circle, #2c2c54, #1a1a2e);
       box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+      transition: all 0.5s ease;
     }
 
     canvas.hell-trial {
@@ -559,6 +560,9 @@
     <button class="reset-btn" onclick="resetGame()">Play Again</button>
   </div>
 
+  <!-- Character Modules -->
+  <script src="demonlord.js"></script>
+
   <script>
     // Character definitions with emojis
     const characters = [
@@ -636,7 +640,99 @@
 
     const audio = new AudioManager();
 
-    // Basic Character class
+    // Projectile class for all projectiles
+    class Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type = 'basic', data = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.emoji = emoji;
+        this.damage = damage;
+        this.owner = owner;
+        this.type = type;
+        this.data = { ...data };
+        this.bounces = 0;
+        this.maxBounces = data.maxBounces || 0;
+        this.lifetime = data.lifetime || Infinity;
+        this.age = 0;
+        this.size = data.size || 16;
+        this.canHitOwner = data.canHitOwner || false;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        if (this.age > this.lifetime) {
+          return false;
+        }
+
+        // Handle specific projectile types
+        if (this.type === "fire") {
+          return this.handleFireUpdate();
+        }
+
+        // Default projectile behavior
+        return true;
+      }
+
+      handleFireUpdate() {
+        // Check wall collision for fire projectiles
+        const margin = this.size;
+        let hitWall = false;
+        let hitSide = null;
+
+        if (this.x <= margin) {
+          hitSide = 'left';
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          hitSide = 'right';
+          hitWall = true;
+        } else if (this.y <= margin) {
+          hitSide = 'top';
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          hitSide = 'bottom';
+          hitWall = true;
+        }
+
+        if (hitWall) {
+          if (this.owner && this.owner.emoji === "😈") {
+            DemonlordModule.handleFireWallHit(this, hitSide);
+          }
+          return false; // Fire stops when hitting wall
+        }
+
+        return true;
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Add glow for special projectiles
+        if (this.type === 'fire') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 10;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+
+      checkCollision(character) {
+        const dx = this.x - character.x;
+        const dy = this.y - character.y;
+        const distance = Math.hypot(dx, dy);
+        return distance < (this.size + character.size);
+      }
+    }
+
+    // Enhanced Character class with module integration
     class ArenaCharacter {
       constructor(emoji, name, x, y, team) {
         this.emoji = emoji;
@@ -661,15 +757,21 @@
         this.statusEffects = new Map();
         this.abilityData = {};
 
-        // Initialize character-specific data (to be expanded per character)
+        // Initialize character-specific abilities using modules
         this.initializeAbilities();
       }
 
       initializeAbilities() {
-        // Base initialization - will be expanded for each character
+        // Base initialization
         this.abilityData = {
           initialized: true
         };
+
+        // Initialize character-specific abilities using modules
+        if (window.DemonlordModule) {
+          DemonlordModule.initializeAbilities(this);
+        }
+        // Additional character modules will be added here
       }
 
       update() {
@@ -717,16 +819,20 @@
 
         this.angle += 0.05;
 
-        // Handle abilities (to be expanded per character)
+        // Handle abilities using modules
         this.handleAbilities();
       }
 
       handleWallCollision(side) {
-        // To be overridden by specific characters
+        // Character-specific wall collision handling can be added here
       }
 
       handleAbilities() {
-        // To be overridden by specific characters
+        // Handle abilities using character modules
+        if (window.DemonlordModule) {
+          DemonlordModule.handleAbilities(this);
+        }
+        // Additional character modules will be called here
       }
 
       takeDamage(amount, source = null) {
@@ -766,6 +872,11 @@
       die() {
         this.isDead = true;
         audio.death();
+        
+        // Handle character-specific death effects
+        if (window.DemonlordModule) {
+          DemonlordModule.handleCharacterDeath(this);
+        }
         
         // Create death animation
         this.createDeathAnimation();
@@ -1031,6 +1142,28 @@
       }
     }
 
+    // Projectile hit handling
+    function handleProjectileHit(projectile, character) {
+      if (character.isDead || character.invulnerable) return;
+      if (character === projectile.owner && !projectile.canHitOwner) return;
+      
+      // Handle fire projectiles
+      if (projectile.type === "fire" && window.DemonlordModule) {
+        DemonlordModule.handleFireHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Default projectile hit
+      character.takeDamage(projectile.damage, projectile.owner);
+      audio.hit();
+    }
+
     // Collision detection
     function handleCharacterCollisions() {
       const CHARACTER_RADIUS = 16;
@@ -1072,7 +1205,7 @@
             b.vx = (b.vx - Math.cos(angle) * BUMP_FORCE) * 0.8;
             b.vy = (b.vy - Math.sin(angle) * BUMP_FORCE) * 0.8;
             
-            // Handle collision-based abilities (to be expanded per character)
+            // Handle collision-based abilities
             if (a.team !== b.team) {
               handleCharacterHit(a, b);
               handleCharacterHit(b, a);
@@ -1100,6 +1233,11 @@
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
+      // Apply Hell's Trial damage
+      if (window.DemonlordModule) {
+        DemonlordModule.applyHellsTrialDamage();
+      }
+      
       // Update and draw characters
       charactersInArena.forEach(c => {
         if (!c.isDead) {
@@ -1118,6 +1256,21 @@
           c.update();
           c.draw(ctx);
         }
+      });
+      
+      // Update and draw projectiles
+      projectiles = projectiles.filter(p => {
+        if (!p.update()) return false;
+        
+        // Check collision with characters
+        charactersInArena.forEach(char => {
+          if (p.checkCollision(char)) {
+            handleProjectileHit(p, char);
+          }
+        });
+        
+        p.draw(ctx);
+        return true;
       });
       
       // Handle character collisions
@@ -1147,6 +1300,10 @@
       charactersInArena = [];
       projectiles = [];
       gameTime = 0;
+      
+      // Reset arena visual effects
+      const canvas = document.getElementById('arena');
+      canvas.classList.remove('hell-trial');
       
       document.getElementById('gameOver').classList.remove('show');
       document.getElementById('characterSelect').style.display = 'flex';
