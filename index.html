@@ -1329,8 +1329,9 @@
         this.vy = (Math.random() * 2 - 1) * 2;
         this.angle = 0;
         this.team = team;
-        this.hp = 100;
-        this.maxHp = 100;
+              // Set HP based on character balance
+      this.maxHp = this.getOptimalHP();
+      this.hp = this.maxHp;
         this.fakeHp = 0;
         this.shield = 0;
         this.size = 16;
@@ -1343,11 +1344,40 @@
         this.statusEffects = new Map();
         this.abilityData = {};
 
-        // Initialize character-specific abilities using modules
-        this.initializeAbilities();
-      }
+              // Initialize character-specific abilities using modules
+      this.initializeAbilities();
+    }
 
-      initializeAbilities() {
+    getOptimalHP() {
+      // Balanced HP values for exciting 1-3 minute battles
+      const hpValues = {
+        // HIGH HP - Low/Moderate damage characters
+        "😈": 120, // Demonlord - Fire + Hell's Trial (medium burst)
+        "👽": 100, // Terestro - Stars + Galactic Overload (moderate)
+        "👾": 110, // Gamemaster - Coins + Game Buster (burst potential)
+        "🤡": 95,  // Mimic - Ball + Balloons (moderate sustain)
+        "🎃": 105, // Tricker - Bat + Blood Suck (moderate control)
+        "👹": 125, // Grinch - Boulders + Healing (high damage + sustain)
+        "👼🏻": 100, // Kael - Blocks + Divine Heal (balanced + sustain)
+        "🤵🏻": 110, // Magico - Cards (moderate + utility)
+        "🐼": 90,  // Black Spot - Low damage + Annoyed Spot burst
+        "🦁": 80,  // Kingstone - Starts weak, scales with Pride
+        "🐰": 115, // Hopper - Distance-based (variable but can be high)
+        
+        // MEDIUM HP - High damage potential
+        "💀": 85,  // Deathblow - High direct damage + skulls
+        "🐺": 130, // Moonhowl - Speed stacking + guaranteed strikes
+        "🐻‍❄️": 95, // Antarticus - Freeze control + execution
+        
+        // LOW HP - Exponential scaling characters  
+        "🐯": 70,  // Clawhard - Life Surge makes him tankier + infinite scaling
+        "🦊": 60   // Frenzy - Lowest HP but highest scaling potential
+      };
+      
+      return hpValues[this.emoji] || 100; // Default fallback
+    }
+
+    initializeAbilities() {
         // Base initialization
         this.abilityData = {
           initialized: true

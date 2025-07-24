@@ -182,14 +182,14 @@ class KingstoneModule {
       hitCooldown: 30,
       
       // Pride member specific
-      baseHp: 10,
+      baseHp: 15, // Updated base HP
       bonusHp: 0
     };
     
-    // Set initial HP (10 + any existing bonuses)
+    // Set initial HP (15 + any existing bonuses for better balance)
     const existingPrideCount = this.prideMembers.filter(m => !m.abilityData.isPrideLeader).length;
-    const bonusHp = existingPrideCount * 5;
-    prideMember.maxHp = 10 + bonusHp;
+    const bonusHp = existingPrideCount * 8; // Increased bonus for more excitement
+    prideMember.maxHp = 15 + bonusHp;
     prideMember.hp = prideMember.maxHp;
     prideMember.abilityData.bonusHp = bonusHp;
     
@@ -211,14 +211,14 @@ class KingstoneModule {
     
     prideMembers.forEach(member => {
       if (member.abilityData) {
-        member.abilityData.bonusHp += 5;
-        const newMaxHp = member.abilityData.baseHp + member.abilityData.bonusHp;
+        member.abilityData.bonusHp += 8; // Increased bonus
+        const newMaxHp = 15 + member.abilityData.bonusHp; // Use new base HP
         const hpIncrease = newMaxHp - member.maxHp;
         
         member.maxHp = newMaxHp;
         member.hp += hpIncrease; // Also increase current HP
         
-        console.log(`🦁 Pride member gained +5 HP! Now ${member.hp}/${member.maxHp}`);
+        console.log(`🦁 Pride member gained +8 HP! Now ${member.hp}/${member.maxHp}`);
       }
     });
     
