@@ -570,6 +570,7 @@
   <script src="grinch.js"></script>
   <script src="kael.js"></script>
   <script src="magico.js"></script>
+  <script src="clawhard.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -712,6 +713,10 @@
         
         if (this.type === "card") {
           return this.handleCardUpdate();
+        }
+        
+        if (this.type === "windslash") {
+          return this.handleWindslashUpdate();
         }
 
         // Default projectile behavior
@@ -1006,6 +1011,21 @@
         return true;
       }
 
+      handleWindslashUpdate() {
+        // Check wall collision - windslashes disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1108,7 +1128,22 @@
             case "diamonds":
               ctx.shadowColor = "#0080ff";
               ctx.shadowBlur = 10;
-              break;
+                           break;
+           }
+        } else if (this.type === "windslash") {
+          // Windslash effects based on Life Surge level
+          if (this.data.lifeSurgeLevel >= 3) {
+            // Enhanced windslash at 10% HP
+            ctx.shadowColor = "#ff6600";
+            ctx.shadowBlur = 15;
+          } else if (this.data.lifeSurgeLevel >= 1) {
+            // Life Surge active
+            ctx.shadowColor = "#00ff88";
+            ctx.shadowBlur = 10;
+          } else {
+            // Normal windslash
+            ctx.shadowColor = "#88ccff";
+            ctx.shadowBlur = 8;
           }
         }
         
@@ -1186,6 +1221,9 @@
         }
         if (window.MagicoModule) {
           MagicoModule.initializeAbilities(this);
+        }
+        if (window.ClawhardModule) {
+          ClawhardModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1278,6 +1316,9 @@
         if (window.MagicoModule) {
           MagicoModule.handleAbilities(this);
         }
+        if (window.ClawhardModule) {
+          ClawhardModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1351,6 +1392,9 @@
         }
         if (window.MagicoModule) {
           MagicoModule.handleCharacterDeath(this);
+        }
+        if (window.ClawhardModule) {
+          ClawhardModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1709,6 +1753,12 @@
       if (projectile.type === "card" && window.MagicoModule) {
         MagicoModule.handleCardHit(projectile, character);
         return; // Cards are removed within handler
+      }
+      
+      // Handle windslash projectiles
+      if (projectile.type === "windslash" && window.ClawhardModule) {
+        ClawhardModule.handleWindslashHit(projectile, character);
+        return; // Windslashes are removed within handler
       }
       
       // Default projectile hit
