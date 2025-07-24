@@ -569,6 +569,7 @@
   <script src="tricker.js"></script>
   <script src="grinch.js"></script>
   <script src="kael.js"></script>
+  <script src="magico.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -707,6 +708,10 @@
         
         if (this.type === "blackblock" || this.type === "whiteblock") {
           return this.handleBlockUpdate();
+        }
+        
+        if (this.type === "card") {
+          return this.handleCardUpdate();
         }
 
         // Default projectile behavior
@@ -986,6 +991,21 @@
         });
       }
 
+      handleCardUpdate() {
+        // Check wall collision - cards disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1070,6 +1090,26 @@
               ctx.shadowBlur = 8;
             }
           }
+        } else if (this.type === "card") {
+          // Card effects based on suit
+          switch (this.data.cardType) {
+            case "hearts":
+              ctx.shadowColor = "#ff0000";
+              ctx.shadowBlur = 10;
+              break;
+            case "spades":
+              ctx.shadowColor = "#000000";
+              ctx.shadowBlur = 10;
+              break;
+            case "clubs":
+              ctx.shadowColor = "#008000";
+              ctx.shadowBlur = 10;
+              break;
+            case "diamonds":
+              ctx.shadowColor = "#0080ff";
+              ctx.shadowBlur = 10;
+              break;
+          }
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -1143,6 +1183,9 @@
         }
         if (window.KaelModule) {
           KaelModule.initializeAbilities(this);
+        }
+        if (window.MagicoModule) {
+          MagicoModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1232,6 +1275,9 @@
         if (window.KaelModule) {
           KaelModule.handleAbilities(this);
         }
+        if (window.MagicoModule) {
+          MagicoModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1302,6 +1348,9 @@
         }
         if (window.KaelModule) {
           KaelModule.handleCharacterDeath(this);
+        }
+        if (window.MagicoModule) {
+          MagicoModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1654,6 +1703,12 @@
       if ((projectile.type === "blackblock" || projectile.type === "whiteblock") && window.KaelModule) {
         KaelModule.handleBlockHit(projectile, character);
         return; // Blocks are removed within handler
+      }
+      
+      // Handle card projectiles
+      if (projectile.type === "card" && window.MagicoModule) {
+        MagicoModule.handleCardHit(projectile, character);
+        return; // Cards are removed within handler
       }
       
       // Default projectile hit
