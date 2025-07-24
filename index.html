@@ -236,12 +236,46 @@
       border-radius: 6px;
     }
 
+    .hp-fake {
+      background-color: #fbbf24;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px;
+    }
+
+    .hp-shield {
+      background-color: #e5e7eb;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      right: 0;
+      border-radius: 6px;
+    }
+
     .character-label {
       font-size: clamp(0.7rem, 2vw, 0.9rem);
       font-weight: 500;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    .status-indicators {
+      display: flex;
+      gap: 4px;
+      font-size: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .status-indicator {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      border: 1px solid #374151;
     }
 
     canvas {
@@ -278,6 +312,28 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+    }
+
+    .death-animation {
+      position: absolute;
+      pointer-events: none;
+      font-size: 48px;
+      animation: deathPop 2s ease-out forwards;
+    }
+
+    @keyframes deathPop {
+      0% { transform: scale(1) rotate(0deg); opacity: 1; }
+      50% { transform: scale(2) rotate(180deg); opacity: 0.8; }
+      100% { transform: scale(0) rotate(360deg); opacity: 0; }
+    }
+
+    .hells-trial {
+      animation: hellsTrial 1s infinite;
+    }
+
+    @keyframes hellsTrial {
+      0%, 100% { background-color: rgba(255, 0, 0, 0.1); }
+      50% { background-color: rgba(255, 0, 0, 0.3); }
     }
 
     @media (max-width: 480px) {
@@ -355,6 +411,1189 @@
 
     let selectedP1 = [];
     let selectedP2 = [];
+    let ctx, canvas;
+    let charactersInArena = [];
+    let projectiles = [];
+    let gameRunning = false;
+    let gameTime = 0;
+    let soundEnabled = true;
+
+    // Audio system
+    class AudioManager {
+      constructor() {
+        this.sounds = {};
+        this.createSounds();
+      }
+
+      createSounds() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      playSound(type, frequency = 440, duration = 0.1) {
+        if (!soundEnabled || !this.audioContext) return;
+        
+        try {
+          const oscillator = this.audioContext.createOscillator();
+          const gainNode = this.audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(this.audioContext.destination);
+          
+          oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+          oscillator.type = 'sine';
+          
+          gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+          
+          oscillator.start(this.audioContext.currentTime);
+          oscillator.stop(this.audioContext.currentTime + duration);
+        } catch(e) {
+          // Silent fail for audio issues
+        }
+      }
+
+      shoot() { this.playSound('shoot', 660, 0.1); }
+      hit() { this.playSound('hit', 880, 0.15); }
+      bounce() { this.playSound('bounce', 220, 0.1); }
+      death() { this.playSound('death', 110, 0.5); }
+      ability() { this.playSound('ability', 1100, 0.2); }
+    }
+
+    const audio = new AudioManager();
+
+    // Projectile class
+    class Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type = 'basic', data = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.emoji = emoji;
+        this.damage = damage;
+        this.owner = owner;
+        this.type = type;
+        this.data = { ...data };
+        this.bounces = 0;
+        this.maxBounces = data.maxBounces || Infinity;
+        this.lifetime = data.lifetime || Infinity;
+        this.age = 0;
+        this.size = data.size || 16;
+        this.canHitOwner = data.canHitOwner || false;
+        this.borderHits = data.borderHits || new Set();
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        if (this.age > this.lifetime) {
+          return false;
+        }
+
+        // Border collision
+        const margin = this.size;
+        let bounced = false;
+        let hitSide = null;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          bounced = true;
+          hitSide = 'left';
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          bounced = true;
+          hitSide = 'right';
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          bounced = true;
+          hitSide = 'top';
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          bounced = true;
+          hitSide = 'bottom';
+        }
+
+        if (bounced) {
+          this.bounces++;
+          audio.bounce();
+          
+          // Track border hits for Demonlord Hell's Trial
+          if (this.type === 'fire' && hitSide) {
+            this.borderHits.add(hitSide);
+            if (this.borderHits.size === 4) {
+              // Hit all four sides - trigger Hell's Trial
+              this.owner.abilityData.hellsTrialCount++;
+              console.log("Hell's Trial activated! Count:", this.owner.abilityData.hellsTrialCount);
+            }
+          }
+          
+          this.handleBounce();
+          
+          if (this.bounces > this.maxBounces) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      handleBounce() {
+        // Handle specific projectile bounce behaviors
+        if (this.type === 'redBall') {
+          this.data.bounces = this.bounces;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Add glow for special projectiles
+        if (this.type === 'fire') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 10;
+        } else if (this.type === 'enhancedStar') {
+          ctx.shadowColor = "#ffff44";
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+
+      checkCollision(character) {
+        const dx = this.x - character.x;
+        const dy = this.y - character.y;
+        const distance = Math.hypot(dx, dy);
+        return distance < (this.size + character.size);
+      }
+    }
+
+    // Enhanced Character class with all abilities
+    class ArenaCharacter {
+      constructor(emoji, name, x, y, team) {
+        this.emoji = emoji;
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() * 2 - 1) * 2;
+        this.vy = (Math.random() * 2 - 1) * 2;
+        this.angle = 0;
+        this.team = team;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.fakeHp = 0;
+        this.shield = 0;
+        this.size = 16;
+        this.lastAbilityTime = 0;
+        this.statusEffects = new Map();
+        this.abilityData = {};
+        this.isDead = false;
+        this.frozen = false;
+        this.frozenUntil = 0;
+        this.invulnerable = false;
+        this.invulnerableUntil = 0;
+        this.speed = 2;
+
+        this.initializeAbilities();
+      }
+
+      initializeAbilities() {
+        switch(this.emoji) {
+          case "😈": // Demonlord
+            this.abilityData = {
+              hellsTrialCount: 0,
+              fireMultiplier: 1
+            };
+            break;
+          case "👽": // Terestro
+            this.abilityData = {
+              lastBlinkTime: 0,
+              enhancedStarHits: 0,
+              overloadActive: false,
+              overloadCount: 0
+            };
+            break;
+          case "👾": // Gamemaster
+            this.abilityData = {
+              coinsCollected: 0,
+              gameBusterActive: false,
+              gameBusterShots: 0
+            };
+            break;
+          case "💀": // Deathblow
+            this.abilityData = {
+              enemyHits: 0,
+              dangerSkulls: []
+            };
+            break;
+          case "🤡": // Mimic
+            this.abilityData = {
+              ballBounces: 0,
+              mimicking: false,
+              mimicUntil: 0,
+              lastMimicTime: 0,
+              originalEmoji: "🤡",
+              balloonCount: 0
+            };
+            break;
+          case "🎃": // Tricker
+            this.abilityData = {
+              webs: [],
+              clonePosition: null,
+              bounceCount: 0,
+              hasClone: false
+            };
+            break;
+          case "👹": // Grinch
+            this.abilityData = {
+              bloodDrops: [],
+              bloodCollected: 0
+            };
+            break;
+          case "👼🏻": // Angerus
+            this.abilityData = {
+              phase: 'black',
+              blockIndex: 0,
+              consecutiveDamage: 0,
+              lastDamageTime: 0,
+              blackHits: 0,
+              whiteHits: 0
+            };
+            break;
+          case "🤵🏻": // Magico
+            this.abilityData = {
+              cardIndex: 0,
+              spadeActive: false,
+              clubsActive: false
+            };
+            break;
+          case "🐯": // Clawhard
+            this.abilityData = {
+              windslashCount: 1,
+              enemyHits: 0
+            };
+            break;
+          case "🦁": // Kingstone
+            this.abilityData = {
+              pride: [],
+              enemyHits: 0
+            };
+            break;
+          case "🐺": // Moonhowl
+            this.abilityData = {
+              moonHits: 0,
+              fullMoonActive: false,
+              wolfsenseActive: false,
+              buffActive: false,
+              buffUntil: 0
+            };
+            break;
+          case "🐻‍❄️": // Antarticus
+            this.abilityData = {
+              frozenHits: 0
+            };
+            break;
+          case "🐼": // Black Spot
+            this.abilityData = {
+              leaves: [],
+              hitCount: 0,
+              boostMode: false,
+              boostUntil: 0,
+              lastLeafTime: 0
+            };
+            break;
+          case "🦊": // Frenzy
+            this.abilityData = {
+              speedStacks: 0
+            };
+            break;
+          case "🐰": // Hopper
+            this.abilityData = {
+              charging: false,
+              chargeUntil: 0,
+              lastJumpDistance: 0,
+              attachedTo: null,
+              attachTime: 0
+            };
+            break;
+        }
+      }
+
+      update() {
+        if (this.isDead) return;
+
+        // Handle frozen state
+        if (this.frozen && gameTime < this.frozenUntil) {
+          return;
+        } else {
+          this.frozen = false;
+        }
+
+        // Handle invulnerability
+        if (this.invulnerable && gameTime < this.invulnerableUntil) {
+          // Still invulnerable
+        } else {
+          this.invulnerable = false;
+        }
+
+        this.handleMovement();
+        this.handleAbilities();
+        this.updateStatusEffects();
+      }
+
+      handleMovement() {
+        // Special movement for specific characters
+        if (this.emoji === "🐰") { // Hopper
+          if (this.abilityData.charging) {
+            if (gameTime >= this.abilityData.chargeUntil) {
+              // Hop to next position
+              this.performHop();
+            }
+            return; // Don't move while charging
+          }
+          
+          if (this.abilityData.attachedTo && gameTime < this.abilityData.attachTime + 180) {
+            // Attached to border for 3 seconds
+            return;
+          } else if (this.abilityData.attachedTo) {
+            // Start charging for next hop
+            this.abilityData.charging = true;
+            this.abilityData.chargeUntil = gameTime + 180;
+            this.abilityData.attachedTo = null;
+            return;
+          }
+        }
+
+        // Apply movement modifiers
+        let speedMultiplier = 1;
+        
+        if (this.emoji === "🦊") { // Frenzy
+          speedMultiplier += this.abilityData.speedStacks * 0.2;
+        }
+
+        if (this.emoji === "🐼" && this.abilityData.boostMode && gameTime < this.abilityData.boostUntil) {
+          speedMultiplier *= 5;
+          // Drop leaves while in boost mode
+          if (gameTime % 60 === 0) { // Every second
+            this.dropLeaf();
+          }
+        }
+
+        if (this.emoji === "🐺" && this.abilityData.buffActive && gameTime < this.abilityData.buffUntil) {
+          speedMultiplier *= 2; // Double speed during moon buff
+        }
+
+        this.x += this.vx * speedMultiplier;
+        this.y += this.vy * speedMultiplier;
+
+        // Wall collision
+        const r = this.size;
+        if (this.x < r) {
+          this.x = r;
+          this.vx *= -1;
+          this.handleWallCollision('left');
+        } else if (this.x > canvas.width - r) {
+          this.x = canvas.width - r;
+          this.vx *= -1;
+          this.handleWallCollision('right');
+        }
+
+        if (this.y < r) {
+          this.y = r;
+          this.vy *= -1;
+          this.handleWallCollision('top');
+        } else if (this.y > canvas.height - r) {
+          this.y = canvas.height - r;
+          this.vy *= -1;
+          this.handleWallCollision('bottom');
+        }
+
+        this.angle += 0.05;
+
+        // Drop leaves for Black Spot every 5 seconds
+        if (this.emoji === "🐼" && gameTime - this.abilityData.lastLeafTime > 300) {
+          this.dropLeaf();
+          this.abilityData.lastLeafTime = gameTime;
+        }
+
+        // Drop webs for Tricker every 10 seconds
+        if (this.emoji === "🎃" && gameTime % 600 === 0) {
+          this.abilityData.webs.push({
+            x: this.x,
+            y: this.y,
+            age: 0
+          });
+        }
+      }
+
+      handleWallCollision(side) {
+        if (this.emoji === "💀") { // Deathblow
+          this.spawnDangerSkull();
+        }
+        
+        if (this.emoji === "🎃") { // Tricker
+          this.abilityData.bounceCount++;
+          if (this.abilityData.bounceCount === 1 && !this.abilityData.hasClone) {
+            this.abilityData.clonePosition = { x: this.x, y: this.y };
+            this.abilityData.hasClone = true;
+          }
+          if (this.abilityData.bounceCount % 3 === 0 && this.abilityData.clonePosition) {
+            // Swap with clone
+            const temp = { x: this.x, y: this.y };
+            this.x = this.abilityData.clonePosition.x;
+            this.y = this.abilityData.clonePosition.y;
+            this.abilityData.clonePosition = temp;
+          }
+        }
+
+        if (this.emoji === "🐰") { // Hopper
+          // Attach to border
+          this.abilityData.attachedTo = side;
+          this.abilityData.attachTime = gameTime;
+          this.abilityData.lastJumpDistance = this.calculateJumpDistance();
+        }
+      }
+
+      performHop() {
+        // Hopper hops to a random border
+        const borders = ['left', 'right', 'top', 'bottom'];
+        const targetBorder = borders[Math.floor(Math.random() * borders.length)];
+        
+        switch(targetBorder) {
+          case 'left':
+            this.x = this.size;
+            this.y = Math.random() * (canvas.height - 2 * this.size) + this.size;
+            break;
+          case 'right':
+            this.x = canvas.width - this.size;
+            this.y = Math.random() * (canvas.height - 2 * this.size) + this.size;
+            break;
+          case 'top':
+            this.x = Math.random() * (canvas.width - 2 * this.size) + this.size;
+            this.y = this.size;
+            break;
+          case 'bottom':
+            this.x = Math.random() * (canvas.width - 2 * this.size) + this.size;
+            this.y = canvas.height - this.size;
+            break;
+        }
+        
+        this.abilityData.attachedTo = targetBorder;
+        this.abilityData.attachTime = gameTime;
+        this.abilityData.charging = false;
+      }
+
+      calculateJumpDistance() {
+        // Simplified distance calculation
+        return Math.hypot(canvas.width, canvas.height) * Math.random();
+      }
+
+      handleAbilities() {
+        const currentTime = gameTime;
+        
+        // Handle mimicking state
+        if (this.emoji !== "🤡" && this.abilityData && this.abilityData.mimicking && currentTime >= this.abilityData.mimicUntil) {
+          this.emoji = this.abilityData.originalEmoji;
+          this.abilityData.mimicking = false;
+        }
+
+        // Handle Gamemaster Game Buster
+        if (this.emoji === "👾" && this.abilityData.gameBusterActive) {
+          if (currentTime % 30 === 0 && this.abilityData.gameBusterShots < 20) { // Every 0.5 seconds
+            this.fireCoin();
+            this.abilityData.gameBusterShots++;
+            if (this.abilityData.gameBusterShots >= 20) {
+              this.abilityData.gameBusterActive = false;
+              this.abilityData.gameBusterShots = 0;
+            }
+          }
+          return; // Don't fire normal abilities during Game Buster
+        }
+
+        // Handle Mimic balloon throwing
+        if (this.abilityData.mimicking && this.abilityData.balloonCount < 5) {
+          if (currentTime % 60 === 0) { // Every second
+            this.throwBalloon();
+            this.abilityData.balloonCount++;
+          }
+          return; // Don't fire normal abilities while mimicking
+        }
+
+        switch(this.emoji) {
+          case "😈": // Demonlord
+            if (currentTime - this.lastAbilityTime > 180) { // 3 seconds
+              this.fireFire();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "👽": // Terestro
+            if (this.abilityData.overloadActive && this.abilityData.overloadCount < 3) {
+              if (currentTime - this.lastAbilityTime > 90) { // Faster shooting
+                this.shootEnhancedStars();
+                this.lastAbilityTime = currentTime;
+                this.abilityData.overloadCount++;
+                if (this.abilityData.overloadCount >= 3) {
+                  this.abilityData.overloadActive = false;
+                  this.abilityData.overloadCount = 0;
+                  this.lastAbilityTime = currentTime + 120; // 2 second extra delay
+                }
+              }
+            } else if (currentTime - this.lastAbilityTime > 180) {
+              this.shootStars();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "👾": // Gamemaster
+            if (currentTime - this.lastAbilityTime > 180) {
+              this.fireCoin();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🤡": // Mimic
+            if (!this.hasActiveBall() && !this.abilityData.mimicking) {
+              this.throwRedBall();
+            }
+            break;
+            
+          case "🎃": // Tricker
+            if (!this.hasActiveBat()) {
+              this.spawnBat();
+            }
+            break;
+            
+          case "👹": // Grinch
+            const cooldown = this.abilityData.bloodCollected >= 10 ? 180 : 360;
+            if (currentTime - this.lastAbilityTime > cooldown) {
+              this.throwBoulder();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "👼🏻": // Angerus
+            if (currentTime - this.lastAbilityTime > 120) { // 2 seconds between blocks
+              this.fireBlockSequence();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🤵🏻": // Magico
+            if (currentTime - this.lastAbilityTime > 240) { // 4 seconds for full sequence
+              this.throwCards();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐯": // Clawhard
+            const clawCooldown = this.getClawhardCooldown();
+            if (currentTime - this.lastAbilityTime > clawCooldown) {
+              this.shootWindslash();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐺": // Moonhowl
+            if (this.abilityData.buffActive && gameTime < this.abilityData.buffUntil) {
+              if (currentTime - this.lastAbilityTime > 30) { // 0.5 seconds during buff
+                this.shootMoon();
+                this.lastAbilityTime = currentTime;
+              }
+            } else if (currentTime - this.lastAbilityTime > 120) {
+              this.shootMoon();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+            
+          case "🐻‍❄️": // Antarticus
+            if (this.abilityData.frozenHits >= 10) {
+              // Polar Execution - charge at enemy
+              this.performPolarExecution();
+            } else if (currentTime - this.lastAbilityTime > 180) {
+              this.shootFrozeflake();
+              this.lastAbilityTime = currentTime;
+            }
+            break;
+        }
+      }
+
+      // Ability implementations
+      fireFire() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const fire = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔥", this.abilityData.fireMultiplier, this, "fire",
+          { borderHits: new Set() }
+        );
+        
+        projectiles.push(fire);
+        audio.shoot();
+      }
+
+      shootStars() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            if (this.isDead) return;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.5;
+            const speed = 3;
+            const isEnhanced = i === 3;
+            
+            const star = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              isEnhanced ? "🌟" : "⭐", isEnhanced ? 2 : 1,
+              this, "star", { enhanced: isEnhanced }
+            );
+            
+            projectiles.push(star);
+            audio.shoot();
+          }, i * 100);
+        }
+      }
+
+      shootEnhancedStars() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            if (this.isDead) return;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
+            const speed = 4;
+            
+            const star = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              "🌟", 2, this, "enhancedStar", { enhanced: true }
+            );
+            
+            projectiles.push(star);
+            audio.ability();
+          }, i * 50);
+        }
+      }
+
+      fireCoin() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2.5;
+        
+        const coin = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🪙", 1, this, "coin",
+          { maxBounces: 3, directHit: false, canHitOwner: true }
+        );
+        
+        projectiles.push(coin);
+        audio.shoot();
+      }
+
+      throwRedBall() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2;
+        
+        const ball = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔴", 1, this, "redBall",
+          { bounces: 0, maxBounces: 10, canHitOwner: false }
+        );
+        
+        projectiles.push(ball);
+        audio.shoot();
+      }
+
+      throwBalloon() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const balloon = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🎈", 3, this, "balloon"
+        );
+        
+        projectiles.push(balloon);
+        audio.ability();
+      }
+
+      spawnBat() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2;
+        
+        const bat = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🦇", 1, this, "bat",
+          { lifetime: Infinity, canHitOwner: false }
+        );
+        
+        projectiles.push(bat);
+        audio.shoot();
+      }
+
+      throwBoulder() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2;
+        
+        const boulder = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🪨", 8, this, "giantBoulder",
+          { size: this.size * 2, splits: 0 }
+        );
+        
+        projectiles.push(boulder);
+        audio.shoot();
+      }
+
+      fireBlockSequence() {
+        const blocks = this.abilityData.phase === 'black' 
+          ? ["▪️", "◾", "◼️"] 
+          : ["▫️", "◽", "◻️"];
+        const damages = [1, 2, 4];
+        
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const block = blocks[this.abilityData.blockIndex];
+        const damage = damages[this.abilityData.blockIndex];
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const projectile = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          block, damage, this, "angelBlock",
+          { phase: this.abilityData.phase, index: this.abilityData.blockIndex }
+        );
+        
+        projectiles.push(projectile);
+        audio.shoot();
+        
+        this.abilityData.blockIndex++;
+        if (this.abilityData.blockIndex >= 3) {
+          this.abilityData.blockIndex = 0;
+          // Check for enhanced blocks
+          if (this.abilityData.phase === 'black' && this.abilityData.blackHits >= 3) {
+            // Fire enhanced black block
+            setTimeout(() => {
+              const enhanced = new Projectile(
+                this.x, this.y,
+                Math.cos(angle) * speed, Math.sin(angle) * speed,
+                "🔲", 6, this, "enhancedBlock", { heal: 4 }
+              );
+              projectiles.push(enhanced);
+              this.abilityData.blackHits = 0;
+            }, 100);
+          } else if (this.abilityData.phase === 'white' && this.abilityData.whiteHits >= 3) {
+            // Fire enhanced white block
+            setTimeout(() => {
+              const enhanced = new Projectile(
+                this.x, this.y,
+                Math.cos(angle) * speed, Math.sin(angle) * speed,
+                "🔳", 4, this, "enhancedBlock", { heal: 6 }
+              );
+              projectiles.push(enhanced);
+              this.abilityData.whiteHits = 0;
+            }, 100);
+          }
+          this.abilityData.phase = this.abilityData.phase === 'black' ? 'white' : 'black';
+        }
+      }
+
+      throwCards() {
+        const cards = ["♥️", "♠️", "♣️", "♦️"];
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            if (this.isDead) return;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
+            const speed = 3;
+            
+            const card = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              cards[i], 1, this, "card",
+              { cardType: cards[i] }
+            );
+            
+            projectiles.push(card);
+            audio.shoot();
+          }, i * 200);
+        }
+      }
+
+      shootWindslash() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        for (let i = 0; i < this.abilityData.windslashCount; i++) {
+          const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (i - this.abilityData.windslashCount/2) * 0.2;
+          const speed = 4;
+          
+          const damage = this.hp <= this.maxHp * 0.1 ? 2 : 1;
+          const lifesteal = this.hp <= this.maxHp * 0.1;
+          
+          const windslash = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            "🌀", damage, this, "windslash",
+            { lifesteal: lifesteal }
+          );
+          
+          projectiles.push(windslash);
+        }
+        audio.shoot();
+      }
+
+      shootMoon() {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2.5;
+        
+        const moon = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🌙", 1, this, "moon"
+        );
+        
+        projectiles.push(moon);
+        audio.shoot();
+      }
+
+      shootFrozeflake() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 2;
+        
+        const frozeflake = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "❄️", 1, this, "frozeflake",
+          { maxBounces: 5 }
+        );
+        
+        projectiles.push(frozeflake);
+        audio.shoot();
+      }
+
+      performPolarExecution() {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        // Charge directly at enemy
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        this.vx = Math.cos(angle) * 10;
+        this.vy = Math.sin(angle) * 10;
+        
+        // Deal damage if close enough
+        const distance = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+        if (distance < 50) {
+          enemy.takeDamage(10, this);
+          this.abilityData.frozenHits = 0; // Reset
+        }
+      }
+
+      dropLeaf() {
+        this.abilityData.leaves.push({
+          x: this.x,
+          y: this.y,
+          age: 0
+        });
+      }
+
+      spawnDangerSkull() {
+        if (this.abilityData.dangerSkulls.length < this.abilityData.enemyHits) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1.5;
+          
+          const skull = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            "☠️", 1, this, "dangerSkull",
+            { lifetime: 600, canHitOwner: false }
+          );
+          
+          projectiles.push(skull);
+          this.abilityData.dangerSkulls.push(skull);
+        }
+      }
+
+      // Helper methods
+      getNearestEnemy() {
+        let nearest = null;
+        let minDistance = Infinity;
+        
+        charactersInArena.forEach(c => {
+          if (c.team !== this.team && !c.isDead) {
+            const distance = Math.hypot(c.x - this.x, c.y - this.y);
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearest = c;
+            }
+          }
+        });
+        
+        return nearest;
+      }
+
+      hasActiveBall() {
+        return projectiles.some(p => p.owner === this && p.type === "redBall");
+      }
+
+      hasActiveBat() {
+        return projectiles.some(p => p.owner === this && p.type === "bat");
+      }
+
+      getClawhardCooldown() {
+        if (this.hp <= this.maxHp * 0.1) return 15; // 0.25 seconds
+        if (this.hp <= this.maxHp * 0.25) return 30; // 0.5 seconds  
+        if (this.hp <= this.maxHp * 0.5) return 60; // 1 second
+        return 120; // 2 seconds
+      }
+
+      updateStatusEffects() {
+        // Update status effects
+        this.statusEffects.forEach((effect, key) => {
+          if (effect.duration <= 0) {
+            this.statusEffects.delete(key);
+          } else {
+            effect.duration--;
+            if (effect.onTick) effect.onTick(this);
+          }
+        });
+
+        // Decay fake HP for spade effect
+        if (this.fakeHp > 0) {
+          this.fakeHp = Math.max(0, this.fakeHp - 1/60); // 1 HP per second
+        }
+      }
+
+      takeDamage(amount, source = null) {
+        if (this.isDead || this.invulnerable) return false;
+        
+        // Handle consecutive damage for Angerus
+        if (this.emoji === "👼🏻") {
+          const now = gameTime;
+          if (now - this.abilityData.lastDamageTime <= 60) { // Within 1 second
+            this.abilityData.consecutiveDamage++;
+          } else {
+            this.abilityData.consecutiveDamage = 1;
+          }
+          this.abilityData.lastDamageTime = now;
+          
+          if (this.abilityData.consecutiveDamage >= 20) {
+            this.hp = this.maxHp; // Full heal
+            this.abilityData.consecutiveDamage = 0;
+            return true;
+          }
+        }
+        
+        // Apply damage to fake HP first, then real HP
+        if (this.fakeHp > 0) {
+          const fakeReduction = Math.min(this.fakeHp, amount);
+          this.fakeHp -= fakeReduction;
+          amount -= fakeReduction;
+        }
+        
+        if (amount > 0) {
+          this.hp -= amount;
+          if (this.hp <= 0) {
+            this.hp = 0;
+            this.die();
+          }
+        }
+        
+        // Handle character-specific damage responses
+        if (source && source.emoji === "🦊") { // Frenzy hit
+          source.abilityData.speedStacks++;
+        }
+        
+        if (this.emoji === "🐼") { // Black Spot hit
+          this.abilityData.hitCount++;
+          if (this.abilityData.hitCount >= 5) {
+            this.activateBoostMode();
+            this.abilityData.hitCount = 0;
+          }
+        }
+        
+        return true;
+      }
+
+      heal(amount) {
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+      }
+
+      addFakeHp(amount) {
+        this.fakeHp = Math.min(this.maxHp - this.hp, this.fakeHp + amount);
+      }
+
+      freeze(duration) {
+        this.frozen = true;
+        this.frozenUntil = gameTime + duration;
+      }
+
+      die() {
+        this.isDead = true;
+        audio.death();
+        
+        // Create death animation
+        const rect = canvas.getBoundingClientRect();
+        const deathAnim = document.createElement('div');
+        deathAnim.className = 'death-animation';
+        deathAnim.textContent = this.emoji;
+        deathAnim.style.left = `${rect.left + this.x}px`;
+        deathAnim.style.top = `${rect.top + this.y}px`;
+        document.body.appendChild(deathAnim);
+        
+        setTimeout(() => {
+          deathAnim.remove();
+        }, 2000);
+        
+        // Check win condition
+        setTimeout(() => {
+          checkWinCondition();
+        }, 3000);
+      }
+
+      activateBoostMode() {
+        // Collect all leaves
+        this.abilityData.leaves.forEach(leaf => {
+          this.heal(5);
+        });
+        this.abilityData.leaves = [];
+        
+        // Activate boost
+        this.abilityData.boostMode = true;
+        this.abilityData.boostUntil = gameTime + 480; // 8 seconds
+        this.invulnerable = true;
+        this.invulnerableUntil = gameTime + 480;
+      }
+
+      draw(ctx) {
+        if (this.isDead) return;
+        
+        ctx.save();
+        
+        // Glow effect for special states
+        if (this.invulnerable) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 10;
+        }
+        
+        if (this.frozen) {
+          ctx.shadowColor = "#00ffff";
+          ctx.shadowBlur = 8;
+        }
+        
+        if (this.abilityData.boostMode && gameTime < this.abilityData.boostUntil) {
+          ctx.shadowColor = "#ffff00";
+          ctx.shadowBlur = 12;
+        }
+        
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.font = "32px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        ctx.fillText(this.emoji, 0, 0);
+        
+        ctx.restore();
+        
+        // Draw special elements
+        this.drawSpecialElements(ctx);
+      }
+
+      drawSpecialElements(ctx) {
+        // Draw leaves for Black Spot
+        if (this.emoji === "🐼") {
+          this.abilityData.leaves.forEach(leaf => {
+            ctx.font = "16px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🌿", leaf.x, leaf.y);
+          });
+        }
+        
+        // Draw webs for Tricker
+        if (this.emoji === "🎃") {
+          this.abilityData.webs.forEach(web => {
+            ctx.font = "20px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🕸️", web.x, web.y);
+          });
+        }
+
+        // Draw clone for Tricker
+        if (this.emoji === "🎃" && this.abilityData.clonePosition) {
+          ctx.save();
+          ctx.globalAlpha = 0.3;
+          ctx.font = "32px serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🎃", this.abilityData.clonePosition.x, this.abilityData.clonePosition.y);
+          ctx.restore();
+        }
+
+        // Draw blood drops for Grinch
+        if (this.emoji === "👹") {
+          this.abilityData.bloodDrops.forEach(drop => {
+            ctx.font = "12px serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🩸", drop.x, drop.y);
+          });
+        }
+
+        // Draw pride members for Kingstone
+        if (this.emoji === "🦁") {
+          this.abilityData.pride.forEach(member => {
+            if (!member.isDead) {
+              ctx.font = "24px serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText("🦁", member.x, member.y);
+            }
+          });
+        }
+      }
+    }
 
     function createCharacterGrid(containerId, team) {
       console.log('Creating grid for team', team);
@@ -447,7 +1686,11 @@
       }
       
       console.log('Starting game with:', selectedP1.map(c => c.name), 'vs', selectedP2.map(c => c.name));
-      alert(`Game starting!\nP1: ${selectedP1.map(c => c.name).join(', ')}\nP2: ${selectedP2.map(c => c.name).join(', ')}`);
+      
+      // Initialize audio context
+      if (audio.audioContext.state === 'suspended') {
+        audio.audioContext.resume();
+      }
       
       // Hide selection overlay and show arena
       document.getElementById('characterSelect').style.display = 'none';
@@ -459,22 +1702,40 @@
         `${selectedP1[0].emoji} VS ${selectedP2[0].emoji}`;
       document.getElementById('matchInfo').textContent = info;
       
-      // Create basic HP displays
+      // Create HP displays
       createHPDisplays();
       
       // Initialize canvas
-      const canvas = document.getElementById('arena');
+      canvas = document.getElementById('arena');
       canvas.width = Math.min(window.innerWidth * 0.9, 1000);
       canvas.height = Math.min(window.innerHeight * 0.6, 600);
-      const ctx = canvas.getContext('2d');
+      ctx = canvas.getContext('2d');
       
-      // Draw simple arena
-      ctx.fillStyle = '#222';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#fff';
-      ctx.font = '24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Arena Ready!', canvas.width/2, canvas.height/2);
+      // Create characters
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      // Position team 1
+      const gapX1 = canvas.width / (selectedP1.length + 1);
+      selectedP1.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX1 * (i + 1), canvas.height * 0.2, 1
+        ));
+      });
+      
+      // Position team 2
+      const gapX2 = canvas.width / (selectedP2.length + 1);
+      selectedP2.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX2 * (i + 1), canvas.height * 0.8, 2
+        ));
+      });
+      
+      gameRunning = true;
+      requestAnimationFrame(gameLoop);
     }
 
     function createHPDisplays() {
@@ -491,8 +1752,11 @@
           <div class="hp-bar-container">
             <div class="hp-bar">
               <div class="hp-fill" style="width: 100%"></div>
+              <div class="hp-fake" style="width: 0%"></div>
+              <div class="hp-shield" style="width: 0%"></div>
             </div>
           </div>
+          <div class="status-indicators"></div>
         `;
         hp1.appendChild(div);
       });
@@ -505,19 +1769,537 @@
           <div class="hp-bar-container">
             <div class="hp-bar">
               <div class="hp-fill" style="width: 100%"></div>
+              <div class="hp-fake" style="width: 0%"></div>
+              <div class="hp-shield" style="width: 0%"></div>
             </div>
           </div>
+          <div class="status-indicators"></div>
         `;
         hp2.appendChild(div);
       });
     }
 
+    function updateHPDisplays() {
+      const hp1Elements = document.querySelectorAll("#player1HP .character-status");
+      const hp2Elements = document.querySelectorAll("#player2HP .character-status");
+      
+      selectedP1.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 1);
+        if (character && hp1Elements[i]) {
+          updateCharacterStatus(hp1Elements[i], character);
+        }
+      });
+      
+      selectedP2.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 2);
+        if (character && hp2Elements[i]) {
+          updateCharacterStatus(hp2Elements[i], character);
+        }
+      });
+    }
+
+    function updateCharacterStatus(element, character) {
+      const hpFill = element.querySelector('.hp-fill');
+      const hpFake = element.querySelector('.hp-fake');
+      const hpShield = element.querySelector('.hp-shield');
+      const statusIndicators = element.querySelector('.status-indicators');
+      
+      const hpPercentage = (character.hp / character.maxHp) * 100;
+      const fakePercentage = (character.fakeHp / character.maxHp) * 100;
+      const shieldPercentage = (character.shield / character.maxHp) * 100;
+      
+      hpFill.style.width = `${hpPercentage}%`;
+      hpFake.style.width = `${fakePercentage}%`;
+      hpShield.style.width = `${shieldPercentage}%`;
+      
+      // Update status indicators
+      statusIndicators.innerHTML = "";
+      
+      if (character.frozen) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '❄️';
+        indicator.title = 'Frozen';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.invulnerable) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '🛡️';
+        indicator.title = 'Invulnerable';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.abilityData.boostMode) {
+        const indicator = document.createElement('span');
+        indicator.className = 'status-indicator';
+        indicator.textContent = '⚡';
+        indicator.title = 'Boost Mode';
+        statusIndicators.appendChild(indicator);
+      }
+      
+      if (character.isDead) {
+        element.style.opacity = '0.3';
+      }
+    }
+
+    const MAX_SPEED = 3;
+    const BUMP_FORCE = 0.5;
+    const FRICTION = 0.98;
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      
+      gameTime++;
+      
+      // Clear canvas with Hell's Trial effect
+      const isHellsTrialActive = charactersInArena.some(c => 
+        c.emoji === "😈" && c.abilityData.hellsTrialCount > 0 && !c.isDead
+      );
+      
+      if (isHellsTrialActive) {
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + Math.sin(gameTime * 0.1) * 0.05})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      // Update and draw characters
+      charactersInArena.forEach(c => {
+        if (!c.isDead) {
+          // Apply friction
+          c.vx *= FRICTION;
+          c.vy *= FRICTION;
+          
+          // Cap speed
+          const speed = Math.hypot(c.vx, c.vy);
+          if (speed > MAX_SPEED) {
+            const angle = Math.atan2(c.vy, c.vx);
+            c.vx = Math.cos(angle) * MAX_SPEED;
+            c.vy = Math.sin(angle) * MAX_SPEED;
+          }
+          
+          c.update();
+          c.draw(ctx);
+        }
+      });
+      
+      // Update projectiles
+      projectiles = projectiles.filter(p => {
+        if (!p.update()) return false;
+        
+        // Check collision with characters
+        charactersInArena.forEach(char => {
+          if (char.isDead) return;
+          if (char === p.owner && !p.canHitOwner) return;
+          if (p.checkCollision(char)) {
+            handleProjectileHit(p, char);
+          }
+        });
+        
+        p.draw(ctx);
+        return true;
+      });
+      
+      // Handle character collisions
+      handleCharacterCollisions();
+      
+      // Update HP displays
+      updateHPDisplays();
+      
+      // Hell's Trial damage
+      if (isHellsTrialActive) {
+        if (gameTime % 60 === 0) { // Every second
+          charactersInArena.forEach(c => {
+            if (c.emoji !== "😈" && !c.isDead) {
+              const demonlord = charactersInArena.find(d => d.emoji === "😈" && d.team !== c.team && !d.isDead);
+              if (demonlord) {
+                const damage = demonlord.abilityData.hellsTrialCount >= 2 ? 2 : 1;
+                c.takeDamage(damage);
+              }
+            }
+          });
+        }
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function handleCharacterCollisions() {
+      const CHARACTER_RADIUS = 16;
+      const MIN_DISTANCE = CHARACTER_RADIUS * 2;
+      
+      for (let i = 0; i < charactersInArena.length; i++) {
+        for (let j = i + 1; j < charactersInArena.length; j++) {
+          const a = charactersInArena[i];
+          const b = charactersInArena[j];
+          
+          if (a.isDead || b.isDead) continue;
+          
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < MIN_DISTANCE) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = MIN_DISTANCE - distance;
+            
+            // Push apart
+            const pushX = Math.cos(angle) * (overlap / 2);
+            const pushY = Math.sin(angle) * (overlap / 2);
+            a.x += pushX;
+            a.y += pushY;
+            b.x -= pushX;
+            b.y -= pushY;
+            
+            // Clamp positions
+            a.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, a.x));
+            a.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, a.y));
+            b.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, b.x));
+            b.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, b.y));
+            
+            // Apply bump force
+            a.vx = (a.vx + Math.cos(angle) * BUMP_FORCE) * 0.8;
+            a.vy = (a.vy + Math.sin(angle) * BUMP_FORCE) * 0.8;
+            b.vx = (b.vx - Math.cos(angle) * BUMP_FORCE) * 0.8;
+            b.vy = (b.vy - Math.sin(angle) * BUMP_FORCE) * 0.8;
+            
+            // Handle collision-based abilities
+            if (a.team !== b.team) {
+              handleCharacterHit(a, b);
+              handleCharacterHit(b, a);
+            }
+          }
+        }
+        
+        // Check collision with hopper radius
+        const char = charactersInArena[i];
+        if (char.emoji === "🐰" && !char.isDead) {
+          charactersInArena.forEach(other => {
+            if (other !== char && !other.isDead && other.team !== char.team) {
+              const distance = Math.hypot(other.x - char.x, other.y - char.y);
+              if (distance <= char.size * 5) { // 5x radius
+                const damage = calculateHopperDamage(char, other, false);
+                other.takeDamage(damage, char);
+                other.statusEffects.set('stunned', { duration: 60 }); // 1 second stun
+              }
+            }
+          });
+        }
+      }
+    }
+
+    function handleCharacterHit(attacker, victim) {
+      if (victim.isDead || victim.invulnerable) return;
+      
+      let damage = 1;
+      
+      // Character-specific damage calculations
+      if (attacker.emoji === "💀") { // Deathblow
+        damage = 3;
+        attacker.abilityData.enemyHits++;
+      } else if (attacker.emoji === "🦁") { // Kingstone
+        damage = 1 + attacker.abilityData.pride.length;
+        attacker.abilityData.enemyHits++;
+        // Spawn Leo
+        spawnLeo(attacker);
+      } else if (attacker.emoji === "🦊") { // Frenzy
+        damage = Math.pow(2, Math.floor(attacker.abilityData.speedStacks / 5));
+        attacker.abilityData.speedStacks++;
+      } else if (attacker.emoji === "🐰") { // Hopper
+        damage = calculateHopperDamage(attacker, victim, true);
+        // Start charging phase
+        attacker.abilityData.charging = true;
+        attacker.abilityData.chargeUntil = gameTime + 180; // 3 seconds
+      }
+      
+      victim.takeDamage(damage, attacker);
+      audio.hit();
+    }
+
+    function spawnLeo(kingstone) {
+      // Add Leo to projectiles that will evolve into pride member
+      const leo = new Projectile(
+        kingstone.x, kingstone.y,
+        (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2,
+        "♌", 0, kingstone, "leo",
+        { canHitOwner: true }
+      );
+      projectiles.push(leo);
+    }
+
+    function calculateHopperDamage(hopper, victim, isDirect) {
+      const distance = hopper.abilityData.lastJumpDistance || canvas.width;
+      
+      if (distance >= canvas.width * 0.8) { // Long jump
+        return isDirect ? 8 : 6;
+      } else if (distance >= canvas.width * 0.4) { // Medium jump
+        return isDirect ? 5 : 3;
+      } else { // Short jump
+        return isDirect ? 2 : 1;
+      }
+    }
+
+    function handleProjectileHit(projectile, character) {
+      if (character.isDead || character.invulnerable) return;
+      
+      let damage = projectile.damage;
+      let removeProjectile = true;
+      
+      // Handle specific projectile types
+      switch(projectile.type) {
+        case "fire":
+          // Apply Hell's Trial multiplier
+          const demonlord = projectile.owner;
+          const multiplier = demonlord.abilityData.hellsTrialCount || 1;
+          character.takeDamage(damage * multiplier, projectile.owner);
+          // Add burn effect
+          setTimeout(() => {
+            if (!character.isDead) {
+              character.takeDamage(1);
+            }
+          }, 1000);
+          break;
+          
+        case "star":
+        case "enhancedStar":
+          if (projectile.data.enhanced) {
+            projectile.owner.abilityData.enhancedStarHits++;
+            if (projectile.owner.abilityData.enhancedStarHits >= 3) {
+              // Trigger Galactic Overload
+              projectile.owner.abilityData.overloadActive = true;
+              projectile.owner.abilityData.enhancedStarHits = 0;
+            }
+          }
+          character.takeDamage(damage, projectile.owner);
+          break;
+          
+        case "coin":
+          if (!projectile.data.directHit && character !== projectile.owner) {
+            projectile.data.directHit = true;
+            damage = 2; // Jackpot Strike
+            projectile.owner.heal(1);
+          } else if (character === projectile.owner) {
+            // Gamemaster caught his own coin
+            projectile.owner.abilityData.coinsCollected++;
+            if (projectile.owner.abilityData.coinsCollected >= 20) {
+              projectile.owner.abilityData.gameBusterActive = true;
+              projectile.owner.abilityData.coinsCollected = 0;
+            }
+            removeProjectile = true;
+            return; // Don't damage owner
+          }
+          character.takeDamage(damage, projectile.owner);
+          break;
+          
+        case "redBall":
+          if (projectile.data.bounces >= 10) {
+            damage = 5; // 10th Impact
+          }
+          character.takeDamage(damage, projectile.owner);
+          
+          // Greatest Mimicry
+          if (projectile.owner.emoji === "🤡" && !projectile.owner.abilityData.mimicking) {
+            const now = gameTime;
+            if (now - projectile.owner.abilityData.lastMimicTime > 600) { // 10 second cooldown
+              projectile.owner.abilityData.mimicking = true;
+              projectile.owner.abilityData.mimicUntil = now + 300; // 5 seconds
+              projectile.owner.abilityData.lastMimicTime = now;
+              projectile.owner.abilityData.originalEmoji = projectile.owner.emoji;
+              projectile.owner.emoji = character.emoji; // Transform
+              projectile.owner.abilityData.balloonCount = 0;
+            }
+          }
+          
+          if (projectile.data.bounces < 10) {
+            removeProjectile = false;
+          }
+          break;
+          
+        case "windslash":
+          character.takeDamage(damage, projectile.owner);
+          if (projectile.data.lifesteal) {
+            projectile.owner.heal(1);
+          }
+          projectile.owner.abilityData.enemyHits++;
+          if (projectile.owner.abilityData.enemyHits % 3 === 0) {
+            projectile.owner.abilityData.windslashCount++;
+          }
+          break;
+          
+        case "moon":
+          character.takeDamage(damage, projectile.owner);
+          projectile.owner.abilityData.moonHits++;
+          if (projectile.owner.abilityData.moonHits >= 3) {
+            // Trigger Full Moon
+            projectiles = projectiles.filter(p => p.type !== "moon"); // Remove all moons
+            triggerFullMoon(projectile.owner);
+            projectile.owner.abilityData.moonHits = 0;
+          }
+          break;
+          
+        case "frozeflake":
+          if (!character.frozen) {
+            const freezeDuration = (projectile.owner.abilityData.frozenHits + 1) * 60 + 180; // 3+ seconds
+            character.freeze(freezeDuration);
+            character.takeDamage(1, projectile.owner); // 1 damage per second while frozen
+            projectile.owner.abilityData.frozenHits++;
+          } else {
+            removeProjectile = false; // Bounce off frozen enemy
+          }
+          break;
+          
+        case "balloon":
+          character.takeDamage(damage, projectile.owner);
+          break;
+          
+        case "angelBlock":
+          character.takeDamage(damage, projectile.owner);
+          if (projectile.data.phase === 'black') {
+            projectile.owner.abilityData.blackHits++;
+          } else {
+            projectile.owner.abilityData.whiteHits++;
+            projectile.owner.heal(damage); // White blocks heal owner
+          }
+          break;
+          
+        case "enhancedBlock":
+          character.takeDamage(damage, projectile.owner);
+          if (projectile.data.heal) {
+            projectile.owner.heal(projectile.data.heal);
+          }
+          // Enhanced blocks can block other projectiles
+          projectiles = projectiles.filter(p => {
+            if (p !== projectile && p.checkCollision({ x: projectile.x, y: projectile.y, size: projectile.size })) {
+              return false; // Remove blocked projectile
+            }
+            return true;
+          });
+          break;
+          
+        case "card":
+          handleCardEffect(projectile, character);
+          break;
+          
+        case "leo":
+          if (character === projectile.owner) {
+            // Leo hits Kingstone - evolve into Pride member
+            const prideMember = {
+              x: projectile.x,
+              y: projectile.y,
+              vx: projectile.vx,
+              vy: projectile.vy,
+              hp: 10 + projectile.owner.abilityData.pride.length * 5,
+              maxHp: 10 + projectile.owner.abilityData.pride.length * 5,
+              isDead: false
+            };
+            projectile.owner.abilityData.pride.push(prideMember);
+            
+            // Boost all pride members
+            projectile.owner.abilityData.pride.forEach(member => {
+              member.hp += 5;
+              member.maxHp += 5;
+            });
+          }
+          break;
+          
+        case "dangerSkull":
+          if (character !== projectile.owner) {
+            character.takeDamage(damage, projectile.owner);
+          } else {
+            removeProjectile = true; // Disappear when hitting owner
+          }
+          break;
+      }
+      
+      if (removeProjectile) {
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+      }
+      
+      audio.hit();
+    }
+
+    function triggerFullMoon(moonhowl) {
+      const fullMoon = new Projectile(
+        moonhowl.x, moonhowl.y,
+        (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4,
+        "🌕", 8, moonhowl, "fullMoon"
+      );
+      projectiles.push(fullMoon);
+    }
+
+    function handleCardEffect(projectile, character) {
+      const cardType = projectile.data.cardType;
+      
+      switch(cardType) {
+        case "♥️": // Hearts
+          if (projectile.owner.hp >= projectile.owner.maxHp) {
+            character.takeDamage(5, projectile.owner); // Full HP = damage enemy
+          } else {
+            const healAmount = Math.floor(projectile.owner.hp * 0.5);
+            projectile.owner.heal(healAmount);
+          }
+          break;
+          
+        case "♠️": // Spades
+          const fakeHp = Math.floor(character.hp * 0.5);
+          character.addFakeHp(fakeHp);
+          projectile.owner.abilityData.spadeActive = true;
+          break;
+          
+        case "♣️": // Clubs
+          if (projectile.owner.abilityData.spadeActive) {
+            character.freeze(600); // 10 seconds
+          } else {
+            character.freeze(180); // 3 seconds
+          }
+          projectile.owner.abilityData.clubsActive = true;
+          break;
+          
+        case "♦️": // Diamonds
+          if (projectile.owner.abilityData.spadeActive) {
+            const fakeDamage = character.fakeHp;
+            character.fakeHp = 0;
+            character.takeDamage(fakeDamage, projectile.owner);
+          } else {
+            character.takeDamage(3, projectile.owner);
+          }
+          break;
+      }
+    }
+
+    function checkWinCondition() {
+      const team1Alive = charactersInArena.filter(c => c.team === 1 && !c.isDead);
+      const team2Alive = charactersInArena.filter(c => c.team === 2 && !c.isDead);
+      
+      if (team1Alive.length === 0 || team2Alive.length === 0) {
+        gameRunning = false;
+        
+        const winner = team1Alive.length > 0 ? "🟢 Player 1" : "🔵 Player 2";
+        document.getElementById("winnerText").textContent = `${winner} Wins!`;
+        
+        setTimeout(() => {
+          document.getElementById("gameOver").classList.add("show");
+        }, 2000);
+      }
+    }
+
     function resetGame() {
-      selectedP1 = [];
-      selectedP2 = [];
+      gameRunning = false;
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
       document.getElementById('gameOver').classList.remove('show');
       document.getElementById('characterSelect').style.display = 'flex';
       document.querySelector('.arena-container').style.display = 'none';
+      
+      selectedP1 = [];
+      selectedP2 = [];
       updateDisplay();
     }
 
@@ -527,14 +2309,6 @@
     createCharacterGrid('player2Chars', 2);
     updateDisplay();
     console.log('Game initialized!');
-
-    // Test function to verify everything works
-    window.testClick = function() {
-      console.log('Manual test click');
-      selectCharacter(characters[0], 1);
-    };
-
-    console.log('You can test manually by typing: testClick()');
   </script>
 </body>
 </html>
