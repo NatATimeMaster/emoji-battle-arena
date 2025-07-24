@@ -564,6 +564,7 @@
   <script src="demonlord.js"></script>
   <script src="terestro.js"></script>
   <script src="gamemaster.js"></script>
+  <script src="deathblow.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -683,6 +684,10 @@
         if (this.type === "coin" || this.type === "bank") {
           return this.handleCoinUpdate();
         }
+        
+        if (this.type === "dangerskull") {
+          return this.handleDangerskullUpdate();
+        }
 
         // Default projectile behavior
         return true;
@@ -767,6 +772,48 @@
         return true;
       }
 
+      handleDangerskullUpdate() {
+        // Check lifetime
+        const currentTime = gameTime;
+        if (currentTime - this.data.spawnTime >= this.data.lifetime) {
+          // Remove from owner's active list
+          if (this.owner && this.owner.abilityData && window.DeathblowModule) {
+            DeathblowModule.removeDangerskull(this.owner, this);
+          }
+          return false;
+        }
+
+        // Handle wall bouncing for Dangerskulls
+        const margin = this.size;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.DeathblowModule) {
+          return DeathblowModule.handleDangerskullWallBounce(this);
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -793,6 +840,12 @@
           ctx.shadowBlur = 12;
           // Add pulsing effect for banks
           const pulse = Math.sin(this.age * 0.1) * 0.2 + 1;
+          ctx.globalAlpha = pulse;
+        } else if (this.type === 'dangerskull') {
+          ctx.shadowColor = "#ff0000";
+          ctx.shadowBlur = 10;
+          // Add pulsing effect for Dangerskulls
+          const pulse = Math.sin(this.age * 0.15) * 0.1 + 0.9;
           ctx.globalAlpha = pulse;
         }
         
@@ -853,6 +906,9 @@
         if (window.GamemasterModule) {
           GamemasterModule.initializeAbilities(this);
         }
+        if (window.DeathblowModule) {
+          DeathblowModule.initializeAbilities(this);
+        }
         // Additional character modules will be added here
       }
 
@@ -906,7 +962,10 @@
       }
 
       handleWallCollision(side) {
-        // Character-specific wall collision handling can be added here
+        // Character-specific wall collision handling
+        if (window.DeathblowModule) {
+          DeathblowModule.handleWallCollision(this, side);
+        }
       }
 
       handleAbilities() {
@@ -919,6 +978,9 @@
         }
         if (window.GamemasterModule) {
           GamemasterModule.handleAbilities(this);
+        }
+        if (window.DeathblowModule) {
+          DeathblowModule.handleAbilities(this);
         }
         // Additional character modules will be called here
       }
@@ -970,6 +1032,9 @@
         }
         if (window.GamemasterModule) {
           GamemasterModule.handleCharacterDeath(this);
+        }
+        if (window.DeathblowModule) {
+          DeathblowModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1283,6 +1348,12 @@
         return; // Banks are removed within the handler if collected
       }
       
+      // Handle dangerskull projectiles
+      if (projectile.type === "dangerskull" && window.DeathblowModule) {
+        DeathblowModule.handleDangerskullHit(projectile, character);
+        return; // Dangerskulls are removed within the handler
+      }
+      
       // Default projectile hit
       character.takeDamage(projectile.damage, projectile.owner);
       audio.hit();
@@ -1340,9 +1411,14 @@
     }
 
     function handleCharacterHit(attacker, victim) {
-      // Basic collision damage - to be expanded per character
-      victim.takeDamage(1, attacker);
-      audio.hit();
+      // Handle character-specific collision damage
+      if (attacker.emoji === "💀" && window.DeathblowModule) {
+        DeathblowModule.handleEnemyHit(attacker, victim);
+      } else {
+        // Basic collision damage for other characters
+        victim.takeDamage(1, attacker);
+        audio.hit();
+      }
     }
 
     // Game loop
