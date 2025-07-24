@@ -576,6 +576,7 @@
   <script src="antarticus.js"></script>
   <script src="blackspot.js"></script>
   <script src="frenzy.js"></script>
+  <script src="hopper.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -1398,6 +1399,9 @@
         if (window.FrenzyModule) {
           FrenzyModule.initializeAbilities(this);
         }
+        if (window.HopperModule) {
+          HopperModule.initializeAbilities(this);
+        }
         // Additional character modules will be added here
       }
 
@@ -1436,26 +1440,28 @@
         this.x += this.vx;
         this.y += this.vy;
 
-        // Wall collision
-        const r = this.size;
-        if (this.x < r) {
-          this.x = r;
-          this.vx *= -1;
-          this.handleWallCollision('left');
-        } else if (this.x > canvas.width - r) {
-          this.x = canvas.width - r;
-          this.vx *= -1;
-          this.handleWallCollision('right');
-        }
+        // Wall collision (skip for Hopper - uses custom system)
+        if (!this.hopperOverride) {
+          const r = this.size;
+          if (this.x < r) {
+            this.x = r;
+            this.vx *= -1;
+            this.handleWallCollision('left');
+          } else if (this.x > canvas.width - r) {
+            this.x = canvas.width - r;
+            this.vx *= -1;
+            this.handleWallCollision('right');
+          }
 
-        if (this.y < r) {
-          this.y = r;
-          this.vy *= -1;
-          this.handleWallCollision('top');
-        } else if (this.y > canvas.height - r) {
-          this.y = canvas.height - r;
-          this.vy *= -1;
-          this.handleWallCollision('bottom');
+          if (this.y < r) {
+            this.y = r;
+            this.vy *= -1;
+            this.handleWallCollision('top');
+          } else if (this.y > canvas.height - r) {
+            this.y = canvas.height - r;
+            this.vy *= -1;
+            this.handleWallCollision('bottom');
+          }
         }
 
         this.angle += 0.05;
@@ -1520,6 +1526,9 @@
         }
         if (window.FrenzyModule) {
           FrenzyModule.handleAbilities(this);
+        }
+        if (window.HopperModule) {
+          HopperModule.handleAbilities(this);
         }
         // Additional character modules will be called here
       }
@@ -1625,6 +1634,9 @@
         }
         if (window.FrenzyModule) {
           FrenzyModule.handleCharacterDeath(this);
+        }
+        if (window.HopperModule) {
+          HopperModule.handleCharacterDeath(this);
         }
         
         // Create death animation
