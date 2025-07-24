@@ -474,12 +474,11 @@
         this.type = type;
         this.data = { ...data };
         this.bounces = 0;
-        this.maxBounces = data.maxBounces || Infinity;
+        this.maxBounces = data.maxBounces || 0; // Default no bouncing
         this.lifetime = data.lifetime || Infinity;
         this.age = 0;
         this.size = data.size || 16;
         this.canHitOwner = data.canHitOwner || false;
-        this.borderHits = data.borderHits || new Set();
       }
 
       update() {
@@ -488,6 +487,10 @@
         this.age++;
 
         if (this.age > this.lifetime) {
+          // Handle skull lifetime expiry
+          if (this.type === "dangerSkull") {
+            this.owner.abilityData.activeSkulls--;
+          }
           return false;
         }
 
@@ -521,34 +524,93 @@
         }
 
         if (bounced) {
-          this.bounces++;
-          audio.bounce();
+          this.handleWallHit(hitSide);
           
-          // Track border hits for Demonlord Hell's Trial
-          if (this.type === 'fire' && hitSide) {
-            this.borderHits.add(hitSide);
-            if (this.borderHits.size === 4) {
-              // Hit all four sides - trigger Hell's Trial
-              this.owner.abilityData.hellsTrialCount++;
-              console.log("Hell's Trial activated! Count:", this.owner.abilityData.hellsTrialCount);
+          if (this.type === "fire") {
+            // Fire projectiles stop on wall hit
+            if (this.data.wallsHitTracker) {
+              this.data.wallsHitTracker.add(hitSide);
+              if (this.data.wallsHitTracker.size === 4) {
+                // All 4 walls hit - trigger Hell's Trial
+                this.owner.abilityData.hellsTrialTriggers++;
+                this.owner.abilityData.hellsTrialActive = true;
+                
+                // Activate Hell's Trial for all enemies
+                charactersInArena.forEach(c => {
+                  if (c.team !== this.owner.team) {
+                    c.abilityData.hellsTrialActive = true;
+                  }
+                });
+                
+                this.data.wallsHitTracker.clear(); // Reset for next trigger
+              }
+            }
+            return false; // Fire stops on wall hit
+          }
+          
+          if (this.type === "boulder") {
+            // Boulder hits wall - split
+            return this.handleBoulderSplit();
+          }
+          
+          if (this.type === "frozeflake") {
+            this.bounces++;
+            if (this.bounces >= 5) {
+              return false; // Disappears after 5 bounces
             }
           }
           
-          this.handleBounce();
+          if (this.type === "coin") {
+            this.data.bounceCount++;
+            if (this.data.bounceCount > this.maxBounces) {
+              return false;
+            }
+            this.data.directHit = false; // No longer direct hit after bouncing
+          }
           
-          if (this.bounces > this.maxBounces) {
-            return false;
+          // Other projectiles bounce normally
+          if (this.type === "redBall" || this.type === "bat" || this.type === "dangerSkull" || this.type === "moon") {
+            // These continue bouncing
+            audio.bounce();
           }
         }
 
         return true;
       }
 
-      handleBounce() {
-        // Handle specific projectile bounce behaviors
-        if (this.type === 'redBall') {
-          this.data.bounces = this.bounces;
+      handleWallHit(side) {
+        // Specific wall hit behaviors
+      }
+
+      handleBoulderSplit() {
+        const currentSize = this.data.boulderSize;
+        
+        if (currentSize === "giant") {
+          // Split into 2 medium boulders
+          for (let i = 0; i < 2; i++) {
+            const newBoulder = new Projectile(
+              this.x, this.y,
+              (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4,
+              "🪨", 4, this.owner, "boulder",
+              { size: this.size * 0.75, boulderSize: "medium" }
+            );
+            projectiles.push(newBoulder);
+          }
+        } else if (currentSize === "medium") {
+          // Split into 2 small rocks
+          for (let i = 0; i < 2; i++) {
+            const newRock = new Projectile(
+              this.x, this.y,
+              (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4,
+              "🪨", 2, this.owner, "boulder",
+              { size: this.size * 0.5, boulderSize: "small" }
+            );
+            projectiles.push(newRock);
+          }
         }
+        // Small rocks just disappear
+        
+        return false; // Remove original boulder
       }
 
       draw(ctx) {
@@ -564,6 +626,9 @@
         } else if (this.type === 'enhancedStar') {
           ctx.shadowColor = "#ffff44";
           ctx.shadowBlur = 8;
+        } else if (this.type === 'fullMoon') {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 15;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -603,6 +668,7 @@
         this.invulnerable = false;
         this.invulnerableUntil = 0;
         this.speed = 2;
+        this.originalSize = 16;
 
         this.initializeAbilities();
       }
@@ -611,16 +677,19 @@
         switch(this.emoji) {
           case "😈": // Demonlord
             this.abilityData = {
-              hellsTrialCount: 0,
-              fireMultiplier: 1
+              wallsHit: new Set(),
+              hellsTrialTriggers: 0,
+              hellsTrialActive: false,
+              lastHellsTrialDamage: 0
             };
             break;
           case "👽": // Terestro
             this.abilityData = {
-              lastBlinkTime: 0,
               enhancedStarHits: 0,
               overloadActive: false,
-              overloadCount: 0
+              overloadBarrageCount: 0,
+              lastBlinkTime: 0,
+              overloadComplete: false
             };
             break;
           case "👾": // Gamemaster
@@ -633,7 +702,7 @@
           case "💀": // Deathblow
             this.abilityData = {
               enemyHits: 0,
-              dangerSkulls: []
+              activeSkulls: 0
             };
             break;
           case "🤡": // Mimic
@@ -643,7 +712,8 @@
               mimicUntil: 0,
               lastMimicTime: 0,
               originalEmoji: "🤡",
-              balloonCount: 0
+              balloonCount: 0,
+              hasActiveBall: false
             };
             break;
           case "🎃": // Tricker
@@ -651,13 +721,15 @@
               webs: [],
               clonePosition: null,
               bounceCount: 0,
-              hasClone: false
+              hasClone: false,
+              hasBat: false
             };
             break;
           case "👹": // Grinch
             this.abilityData = {
               bloodDrops: [],
-              bloodCollected: 0
+              bloodCollected: 0,
+              cooldownReduced: false
             };
             break;
           case "👼🏻": // Angerus
@@ -666,8 +738,9 @@
               blockIndex: 0,
               consecutiveDamage: 0,
               lastDamageTime: 0,
-              blackHits: 0,
-              whiteHits: 0
+              phaseComplete: false,
+              blackComplete: false,
+              whiteComplete: false
             };
             break;
           case "🤵🏻": // Magico
@@ -680,7 +753,8 @@
           case "🐯": // Clawhard
             this.abilityData = {
               windslashCount: 1,
-              enemyHits: 0
+              enemyHits: 0,
+              lifeSurgeUsed: false
             };
             break;
           case "🦁": // Kingstone
@@ -695,12 +769,14 @@
               fullMoonActive: false,
               wolfsenseActive: false,
               buffActive: false,
-              buffUntil: 0
+              buffUntil: 0,
+              wolfsenseTarget: null
             };
             break;
           case "🐻‍❄️": // Antarticus
             this.abilityData = {
-              frozenHits: 0
+              frozenHits: 0,
+              executionReady: false
             };
             break;
           case "🐼": // Black Spot
@@ -719,11 +795,10 @@
             break;
           case "🐰": // Hopper
             this.abilityData = {
-              charging: false,
-              chargeUntil: 0,
-              lastJumpDistance: 0,
               attachedTo: null,
-              attachTime: 0
+              attachTime: 0,
+              lastHopDistance: 0,
+              isCharging: false
             };
             break;
         }
@@ -752,24 +827,14 @@
       }
 
       handleMovement() {
-        // Special movement for specific characters
-        if (this.emoji === "🐰") { // Hopper
-          if (this.abilityData.charging) {
-            if (gameTime >= this.abilityData.chargeUntil) {
-              // Hop to next position
-              this.performHop();
-            }
-            return; // Don't move while charging
-          }
-          
+        // Special movement for Hopper
+        if (this.emoji === "🐰") {
           if (this.abilityData.attachedTo && gameTime < this.abilityData.attachTime + 180) {
             // Attached to border for 3 seconds
             return;
-          } else if (this.abilityData.attachedTo) {
-            // Start charging for next hop
-            this.abilityData.charging = true;
-            this.abilityData.chargeUntil = gameTime + 180;
-            this.abilityData.attachedTo = null;
+          } else if (this.abilityData.attachedTo && gameTime >= this.abilityData.attachTime + 180) {
+            // Hop to next border
+            this.performHop();
             return;
           }
         }
@@ -790,7 +855,21 @@
         }
 
         if (this.emoji === "🐺" && this.abilityData.buffActive && gameTime < this.abilityData.buffUntil) {
-          speedMultiplier *= 2; // Double speed during moon buff
+          const interval = Math.max(30, 30 / Math.pow(2, this.abilityData.buffLevel || 0));
+          if (gameTime % interval === 0) {
+            this.shootMoon();
+          }
+        }
+
+        // Antarticus execution charge
+        if (this.emoji === "🐻‍❄️" && this.abilityData.executionReady) {
+          const enemy = this.getNearestEnemy();
+          if (enemy) {
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+            this.vx = Math.cos(angle) * 10;
+            this.vy = Math.sin(angle) * 10;
+            speedMultiplier = 5;
+          }
         }
 
         this.x += this.vx * speedMultiplier;
@@ -860,11 +939,14 @@
           // Attach to border
           this.abilityData.attachedTo = side;
           this.abilityData.attachTime = gameTime;
-          this.abilityData.lastJumpDistance = this.calculateJumpDistance();
         }
       }
 
       performHop() {
+        // Calculate hop distance
+        const oldX = this.x;
+        const oldY = this.y;
+        
         // Hopper hops to a random border
         const borders = ['left', 'right', 'top', 'bottom'];
         const targetBorder = borders[Math.floor(Math.random() * borders.length)];
@@ -888,14 +970,9 @@
             break;
         }
         
+        this.abilityData.lastHopDistance = Math.hypot(this.x - oldX, this.y - oldY);
         this.abilityData.attachedTo = targetBorder;
         this.abilityData.attachTime = gameTime;
-        this.abilityData.charging = false;
-      }
-
-      calculateJumpDistance() {
-        // Simplified distance calculation
-        return Math.hypot(canvas.width, canvas.height) * Math.random();
       }
 
       handleAbilities() {
@@ -917,7 +994,22 @@
               this.abilityData.gameBusterShots = 0;
             }
           }
-          return; // Don't fire normal abilities during Game Buster
+          return;
+        }
+
+        // Handle Terestro Galactic Overload
+        if (this.emoji === "👽" && this.abilityData.overloadActive) {
+          if (currentTime % 30 === 0 && this.abilityData.overloadBarrageCount < 3) { // Faster shooting
+            this.shootEnhancedStars();
+            this.abilityData.overloadBarrageCount++;
+            if (this.abilityData.overloadBarrageCount >= 3) {
+              this.abilityData.overloadActive = false;
+              this.abilityData.overloadBarrageCount = 0;
+              this.abilityData.overloadComplete = true;
+              this.lastAbilityTime = currentTime + 300; // 5 second delay
+            }
+          }
+          return;
         }
 
         // Handle Mimic balloon throwing
@@ -926,7 +1018,7 @@
             this.throwBalloon();
             this.abilityData.balloonCount++;
           }
-          return; // Don't fire normal abilities while mimicking
+          return;
         }
 
         switch(this.emoji) {
@@ -938,20 +1030,11 @@
             break;
             
           case "👽": // Terestro
-            if (this.abilityData.overloadActive && this.abilityData.overloadCount < 3) {
-              if (currentTime - this.lastAbilityTime > 90) { // Faster shooting
-                this.shootEnhancedStars();
-                this.lastAbilityTime = currentTime;
-                this.abilityData.overloadCount++;
-                if (this.abilityData.overloadCount >= 3) {
-                  this.abilityData.overloadActive = false;
-                  this.abilityData.overloadCount = 0;
-                  this.lastAbilityTime = currentTime + 120; // 2 second extra delay
-                }
-              }
-            } else if (currentTime - this.lastAbilityTime > 180) {
+            const cooldown = this.abilityData.overloadComplete ? 300 : 180; // 5s after overload, otherwise 3s
+            if (currentTime - this.lastAbilityTime > cooldown) {
               this.shootStars();
               this.lastAbilityTime = currentTime;
+              this.abilityData.overloadComplete = false;
             }
             break;
             
@@ -963,20 +1046,20 @@
             break;
             
           case "🤡": // Mimic
-            if (!this.hasActiveBall() && !this.abilityData.mimicking) {
+            if (!this.abilityData.hasActiveBall && !this.abilityData.mimicking) {
               this.throwRedBall();
             }
             break;
             
           case "🎃": // Tricker
-            if (!this.hasActiveBat()) {
+            if (!this.abilityData.hasBat) {
               this.spawnBat();
             }
             break;
             
           case "👹": // Grinch
-            const cooldown = this.abilityData.bloodCollected >= 10 ? 180 : 360;
-            if (currentTime - this.lastAbilityTime > cooldown) {
+            const grinchCooldown = this.abilityData.cooldownReduced ? 180 : 360; // 3s or 6s
+            if (currentTime - this.lastAbilityTime > grinchCooldown) {
               this.throwBoulder();
               this.lastAbilityTime = currentTime;
             }
@@ -1005,21 +1088,21 @@
             break;
             
           case "🐺": // Moonhowl
-            if (this.abilityData.buffActive && gameTime < this.abilityData.buffUntil) {
-              if (currentTime - this.lastAbilityTime > 30) { // 0.5 seconds during buff
-                this.shootMoon();
-                this.lastAbilityTime = currentTime;
-              }
-            } else if (currentTime - this.lastAbilityTime > 120) {
+            if (!this.abilityData.buffActive && currentTime - this.lastAbilityTime > 120) {
               this.shootMoon();
               this.lastAbilityTime = currentTime;
             }
             break;
             
           case "🐻‍❄️": // Antarticus
-            if (this.abilityData.frozenHits >= 10) {
-              // Polar Execution - charge at enemy
-              this.performPolarExecution();
+            if (this.abilityData.executionReady) {
+              // Check if close enough to enemy for execution
+              const enemy = this.getNearestEnemy();
+              if (enemy && Math.hypot(enemy.x - this.x, enemy.y - this.y) < 50) {
+                enemy.takeDamage(10, this);
+                this.abilityData.frozenHits = 0;
+                this.abilityData.executionReady = false;
+              }
             } else if (currentTime - this.lastAbilityTime > 180) {
               this.shootFrozeflake();
               this.lastAbilityTime = currentTime;
@@ -1028,7 +1111,7 @@
         }
       }
 
-      // Ability implementations
+      // Ability implementations with correct behaviors
       fireFire() {
         const enemy = this.getNearestEnemy();
         if (!enemy) return;
@@ -1039,8 +1122,8 @@
         const fire = new Projectile(
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
-          "🔥", this.abilityData.fireMultiplier, this, "fire",
-          { borderHits: new Set() }
+          "🔥", 1, this, "fire",
+          { wallsHitTracker: this.abilityData.wallsHit, owner: this }
         );
         
         projectiles.push(fire);
@@ -1054,7 +1137,7 @@
         for (let i = 0; i < 4; i++) {
           setTimeout(() => {
             if (this.isDead) return;
-            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.5;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
             const speed = 3;
             const isEnhanced = i === 3;
             
@@ -1078,7 +1161,7 @@
         for (let i = 0; i < 4; i++) {
           setTimeout(() => {
             if (this.isDead) return;
-            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.2;
             const speed = 4;
             
             const star = new Projectile(
@@ -1104,7 +1187,7 @@
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
           "🪙", 1, this, "coin",
-          { maxBounces: 3, directHit: false, canHitOwner: true }
+          { maxBounces: 3, directHit: true, bounceCount: 0 }
         );
         
         projectiles.push(coin);
@@ -1119,10 +1202,11 @@
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
           "🔴", 1, this, "redBall",
-          { bounces: 0, maxBounces: 10, canHitOwner: false }
+          { bounces: 0, maxBounces: 10 }
         );
         
         projectiles.push(ball);
+        this.abilityData.hasActiveBall = true;
         audio.shoot();
       }
 
@@ -1151,10 +1235,11 @@
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
           "🦇", 1, this, "bat",
-          { lifetime: Infinity, canHitOwner: false }
+          { lifetime: Infinity }
         );
         
         projectiles.push(bat);
+        this.abilityData.hasBat = true;
         audio.shoot();
       }
 
@@ -1168,8 +1253,8 @@
         const boulder = new Projectile(
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
-          "🪨", 8, this, "giantBoulder",
-          { size: this.size * 2, splits: 0 }
+          "🪨", 8, this, "boulder",
+          { size: this.size * 2, boulderSize: "giant" }
         );
         
         projectiles.push(boulder);
@@ -1177,59 +1262,90 @@
       }
 
       fireBlockSequence() {
-        const blocks = this.abilityData.phase === 'black' 
-          ? ["▪️", "◾", "◼️"] 
-          : ["▫️", "◽", "◻️"];
-        const damages = [1, 2, 4];
-        
+        if (this.abilityData.phase === 'black') {
+          const blocks = ["▪️", "◾", "◼️"];
+          const damages = [1, 2, 4];
+          
+          if (this.abilityData.blockIndex >= 3) {
+            if (this.abilityData.blackComplete) {
+              // Fire enhanced black block
+              this.fireEnhancedBlock("🔲", 6, 4);
+              this.abilityData.blackComplete = false;
+            }
+            this.abilityData.phase = 'white';
+            this.abilityData.blockIndex = 0;
+            return;
+          }
+        } else {
+          const blocks = ["▫️", "◽", "◻️"];
+          const heals = [1, 2, 4];
+          
+          if (this.abilityData.blockIndex >= 3) {
+            if (this.abilityData.whiteComplete) {
+              // Fire enhanced white block
+              this.fireEnhancedBlock("🔳", 4, 6);
+              this.abilityData.whiteComplete = false;
+            }
+            this.abilityData.phase = 'black';
+            this.abilityData.blockIndex = 0;
+            return;
+          }
+        }
+
         const enemy = this.getNearestEnemy();
         if (!enemy) return;
-        
-        const block = blocks[this.abilityData.blockIndex];
-        const damage = damages[this.abilityData.blockIndex];
         
         const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
         const speed = 3;
         
-        const projectile = new Projectile(
-          this.x, this.y,
-          Math.cos(angle) * speed, Math.sin(angle) * speed,
-          block, damage, this, "angelBlock",
-          { phase: this.abilityData.phase, index: this.abilityData.blockIndex }
-        );
-        
-        projectiles.push(projectile);
-        audio.shoot();
+        if (this.abilityData.phase === 'black') {
+          const blocks = ["▪️", "◾", "◼️"];
+          const damages = [1, 2, 4];
+          
+          const projectile = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            blocks[this.abilityData.blockIndex], damages[this.abilityData.blockIndex], 
+            this, "angelBlock",
+            { phase: 'black', index: this.abilityData.blockIndex }
+          );
+          
+          projectiles.push(projectile);
+        } else {
+          const blocks = ["▫️", "◽", "◻️"];
+          const heals = [1, 2, 4];
+          
+          const projectile = new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * speed, Math.sin(angle) * speed,
+            blocks[this.abilityData.blockIndex], 0, 
+            this, "angelBlock",
+            { phase: 'white', heal: heals[this.abilityData.blockIndex], index: this.abilityData.blockIndex }
+          );
+          
+          projectiles.push(projectile);
+        }
         
         this.abilityData.blockIndex++;
-        if (this.abilityData.blockIndex >= 3) {
-          this.abilityData.blockIndex = 0;
-          // Check for enhanced blocks
-          if (this.abilityData.phase === 'black' && this.abilityData.blackHits >= 3) {
-            // Fire enhanced black block
-            setTimeout(() => {
-              const enhanced = new Projectile(
-                this.x, this.y,
-                Math.cos(angle) * speed, Math.sin(angle) * speed,
-                "🔲", 6, this, "enhancedBlock", { heal: 4 }
-              );
-              projectiles.push(enhanced);
-              this.abilityData.blackHits = 0;
-            }, 100);
-          } else if (this.abilityData.phase === 'white' && this.abilityData.whiteHits >= 3) {
-            // Fire enhanced white block
-            setTimeout(() => {
-              const enhanced = new Projectile(
-                this.x, this.y,
-                Math.cos(angle) * speed, Math.sin(angle) * speed,
-                "🔳", 4, this, "enhancedBlock", { heal: 6 }
-              );
-              projectiles.push(enhanced);
-              this.abilityData.whiteHits = 0;
-            }, 100);
-          }
-          this.abilityData.phase = this.abilityData.phase === 'black' ? 'white' : 'black';
-        }
+        audio.shoot();
+      }
+
+      fireEnhancedBlock(emoji, damage, heal) {
+        const enemy = this.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const enhanced = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          emoji, damage, this, "enhancedBlock", 
+          { heal: heal }
+        );
+        
+        projectiles.push(enhanced);
+        audio.ability();
       }
 
       throwCards() {
@@ -1237,23 +1353,25 @@
         const enemy = this.getNearestEnemy();
         if (!enemy) return;
         
-        for (let i = 0; i < 4; i++) {
-          setTimeout(() => {
-            if (this.isDead) return;
-            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (Math.random() - 0.5) * 0.3;
-            const speed = 3;
-            
-            const card = new Projectile(
-              this.x, this.y,
-              Math.cos(angle) * speed, Math.sin(angle) * speed,
-              cards[i], 1, this, "card",
-              { cardType: cards[i] }
-            );
-            
-            projectiles.push(card);
-            audio.shoot();
-          }, i * 200);
+        if (this.abilityData.cardIndex >= 4) {
+          this.abilityData.cardIndex = 0;
+          this.abilityData.spadeActive = false;
+          this.abilityData.clubsActive = false;
         }
+        
+        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
+        const speed = 3;
+        
+        const card = new Projectile(
+          this.x, this.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          cards[this.abilityData.cardIndex], 0, this, "card",
+          { cardType: cards[this.abilityData.cardIndex] }
+        );
+        
+        projectiles.push(card);
+        this.abilityData.cardIndex++;
+        audio.shoot();
       }
 
       shootWindslash() {
@@ -1261,20 +1379,23 @@
         if (!enemy) return;
         
         for (let i = 0; i < this.abilityData.windslashCount; i++) {
-          const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (i - this.abilityData.windslashCount/2) * 0.2;
-          const speed = 4;
-          
-          const damage = this.hp <= this.maxHp * 0.1 ? 2 : 1;
-          const lifesteal = this.hp <= this.maxHp * 0.1;
-          
-          const windslash = new Projectile(
-            this.x, this.y,
-            Math.cos(angle) * speed, Math.sin(angle) * speed,
-            "🌀", damage, this, "windslash",
-            { lifesteal: lifesteal }
-          );
-          
-          projectiles.push(windslash);
+          setTimeout(() => {
+            if (this.isDead) return;
+            const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x) + (i - this.abilityData.windslashCount/2) * 0.1;
+            const speed = 4;
+            
+            const damage = this.hp <= this.maxHp * 0.1 ? 2 : 1;
+            const lifesteal = this.hp <= this.maxHp * 0.1;
+            
+            const windslash = new Projectile(
+              this.x, this.y,
+              Math.cos(angle) * speed, Math.sin(angle) * speed,
+              "🌀", damage, this, "windslash",
+              { lifesteal: lifesteal }
+            );
+            
+            projectiles.push(windslash);
+          }, i * 50);
         }
         audio.shoot();
       }
@@ -1304,28 +1425,11 @@
           this.x, this.y,
           Math.cos(angle) * speed, Math.sin(angle) * speed,
           "❄️", 1, this, "frozeflake",
-          { maxBounces: 5 }
+          { maxBounces: 5, bounces: 0 }
         );
         
         projectiles.push(frozeflake);
         audio.shoot();
-      }
-
-      performPolarExecution() {
-        const enemy = this.getNearestEnemy();
-        if (!enemy) return;
-        
-        // Charge directly at enemy
-        const angle = Math.atan2(enemy.y - this.y, enemy.x - this.x);
-        this.vx = Math.cos(angle) * 10;
-        this.vy = Math.sin(angle) * 10;
-        
-        // Deal damage if close enough
-        const distance = Math.hypot(enemy.x - this.x, enemy.y - this.y);
-        if (distance < 50) {
-          enemy.takeDamage(10, this);
-          this.abilityData.frozenHits = 0; // Reset
-        }
       }
 
       dropLeaf() {
@@ -1337,7 +1441,7 @@
       }
 
       spawnDangerSkull() {
-        if (this.abilityData.dangerSkulls.length < this.abilityData.enemyHits) {
+        if (this.abilityData.activeSkulls < this.abilityData.enemyHits) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 1.5;
           
@@ -1345,11 +1449,11 @@
             this.x, this.y,
             Math.cos(angle) * speed, Math.sin(angle) * speed,
             "☠️", 1, this, "dangerSkull",
-            { lifetime: 600, canHitOwner: false }
+            { lifetime: 600 } // 10 seconds
           );
           
           projectiles.push(skull);
-          this.abilityData.dangerSkulls.push(skull);
+          this.abilityData.activeSkulls++;
         }
       }
 
@@ -1371,15 +1475,9 @@
         return nearest;
       }
 
-      hasActiveBall() {
-        return projectiles.some(p => p.owner === this && p.type === "redBall");
-      }
-
-      hasActiveBat() {
-        return projectiles.some(p => p.owner === this && p.type === "bat");
-      }
-
       getClawhardCooldown() {
+        if (this.abilityData.lifeSurgeUsed) return 120; // Normal after Life Surge used
+        
         if (this.hp <= this.maxHp * 0.1) return 15; // 0.25 seconds
         if (this.hp <= this.maxHp * 0.25) return 30; // 0.5 seconds  
         if (this.hp <= this.maxHp * 0.5) return 60; // 1 second
@@ -1387,19 +1485,20 @@
       }
 
       updateStatusEffects() {
-        // Update status effects
-        this.statusEffects.forEach((effect, key) => {
-          if (effect.duration <= 0) {
-            this.statusEffects.delete(key);
-          } else {
-            effect.duration--;
-            if (effect.onTick) effect.onTick(this);
-          }
-        });
-
         // Decay fake HP for spade effect
         if (this.fakeHp > 0) {
           this.fakeHp = Math.max(0, this.fakeHp - 1/60); // 1 HP per second
+        }
+
+        // Hell's Trial damage
+        if (this.emoji !== "😈" && this.abilityData.hellsTrialActive) {
+          if (gameTime % 60 === 0) { // Every second
+            const demonlord = charactersInArena.find(c => c.emoji === "😈" && c.team !== this.team && !c.isDead);
+            if (demonlord) {
+              const damage = Math.min(2, demonlord.abilityData.hellsTrialTriggers);
+              this.takeDamage(damage);
+            }
+          }
         }
       }
 
@@ -1450,6 +1549,15 @@
             this.abilityData.hitCount = 0;
           }
         }
+
+        // Check Life Surge for Clawhard
+        if (this.emoji === "🐯" && !this.abilityData.lifeSurgeUsed) {
+          if (this.hp <= this.maxHp * 0.25 && this.hp > this.maxHp * 0.1) {
+            // Just dropped below 25%, can't use Life Surge again
+          } else if (this.hp > this.maxHp * 0.25) {
+            this.abilityData.lifeSurgeUsed = false;
+          }
+        }
         
         return true;
       }
@@ -1487,12 +1595,18 @@
         // Check win condition
         setTimeout(() => {
           checkWinCondition();
-        }, 3000);
+        }, 5000); // 5 second delay as specified
       }
 
       activateBoostMode() {
-        // Collect all leaves
+        // Fly all leaves toward Black Spot
         this.abilityData.leaves.forEach(leaf => {
+          const leafProjectile = new Projectile(
+            leaf.x, leaf.y,
+            (this.x - leaf.x) * 0.1, (this.y - leaf.y) * 0.1,
+            "🌿", 3, this, "leaf"
+          );
+          projectiles.push(leafProjectile);
           this.heal(5);
         });
         this.abilityData.leaves = [];
@@ -1527,7 +1641,7 @@
         
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
-        ctx.font = "32px serif";
+        ctx.font = `${this.size * 2}px serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         
@@ -1854,11 +1968,11 @@
       gameTime++;
       
       // Clear canvas with Hell's Trial effect
-      const isHellsTrialActive = charactersInArena.some(c => 
-        c.emoji === "😈" && c.abilityData.hellsTrialCount > 0 && !c.isDead
+      const hellsTrialActive = charactersInArena.some(c => 
+        c.emoji === "😈" && c.abilityData.hellsTrialActive && !c.isDead
       );
       
-      if (isHellsTrialActive) {
+      if (hellsTrialActive) {
         ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + Math.sin(gameTime * 0.1) * 0.05})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       } else {
@@ -1898,8 +2012,86 @@
           }
         });
         
+        // Handle special projectile behaviors
+        if (p.type === "leo" && p.checkCollision(p.owner)) {
+          // Leo hits Kingstone - evolve into Pride member
+          const prideMember = {
+            x: p.x,
+            y: p.y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+            hp: 10 + p.owner.abilityData.pride.length * 5,
+            maxHp: 10 + p.owner.abilityData.pride.length * 5,
+            isDead: false,
+            size: 16
+          };
+          p.owner.abilityData.pride.push(prideMember);
+          
+          // Boost all pride members
+          p.owner.abilityData.pride.forEach(member => {
+            member.hp += 5;
+            member.maxHp += 5;
+          });
+          
+          // Grow Kingstone
+          p.owner.size = p.owner.originalSize * (1 + p.owner.abilityData.pride.length * 0.2);
+          
+          return false; // Remove Leo
+        }
+        
+        // Check coin fusion for Gamemaster
+        if (p.type === "coin") {
+          projectiles.forEach(other => {
+            if (other !== p && other.type === "coin" && p.checkCollision(other)) {
+              // Create bank
+              const bank = new Projectile(
+                (p.x + other.x) / 2, (p.y + other.y) / 2,
+                0, 0, "💰", 0, p.owner, "bank"
+              );
+              projectiles.push(bank);
+              
+              // Remove both coins
+              const pIndex = projectiles.indexOf(p);
+              const otherIndex = projectiles.indexOf(other);
+              if (pIndex > -1) projectiles.splice(pIndex, 1);
+              if (otherIndex > -1) projectiles.splice(otherIndex, 1);
+              
+              return false;
+            }
+          });
+        }
+        
+        // Handle bank collection
+        if (p.type === "bank" && p.checkCollision(p.owner)) {
+          p.owner.abilityData.gameBusterActive = true;
+          return false;
+        }
+        
         p.draw(ctx);
         return true;
+      });
+      
+      // Update pride members for Kingstone
+      charactersInArena.forEach(c => {
+        if (c.emoji === "🦁" && c.abilityData.pride) {
+          c.abilityData.pride.forEach(member => {
+            if (!member.isDead) {
+              // Move pride members
+              member.x += member.vx;
+              member.y += member.vy;
+              
+              // Bounce off walls
+              if (member.x <= 16 || member.x >= canvas.width - 16) {
+                member.vx *= -1;
+                member.x = Math.max(16, Math.min(canvas.width - 16, member.x));
+              }
+              if (member.y <= 16 || member.y >= canvas.height - 16) {
+                member.vy *= -1;
+                member.y = Math.max(16, Math.min(canvas.height - 16, member.y));
+              }
+            }
+          });
+        }
       });
       
       // Handle character collisions
@@ -1907,21 +2099,6 @@
       
       // Update HP displays
       updateHPDisplays();
-      
-      // Hell's Trial damage
-      if (isHellsTrialActive) {
-        if (gameTime % 60 === 0) { // Every second
-          charactersInArena.forEach(c => {
-            if (c.emoji !== "😈" && !c.isDead) {
-              const demonlord = charactersInArena.find(d => d.emoji === "😈" && d.team !== c.team && !d.isDead);
-              if (demonlord) {
-                const damage = demonlord.abilityData.hellsTrialCount >= 2 ? 2 : 1;
-                c.takeDamage(damage);
-              }
-            }
-          });
-        }
-      }
       
       requestAnimationFrame(gameLoop);
     }
@@ -2009,9 +2186,15 @@
         attacker.abilityData.speedStacks++;
       } else if (attacker.emoji === "🐰") { // Hopper
         damage = calculateHopperDamage(attacker, victim, true);
-        // Start charging phase
-        attacker.abilityData.charging = true;
-        attacker.abilityData.chargeUntil = gameTime + 180; // 3 seconds
+        // Treat enemy as border for hopper
+        attacker.abilityData.attachedTo = "enemy";
+        attacker.abilityData.attachTime = gameTime;
+      } else if (attacker.emoji === "🐼") { // Black Spot
+        if (attacker.abilityData.boostMode && gameTime < attacker.abilityData.boostUntil) {
+          damage = 5; // Boost mode damage
+        } else {
+          damage = 1;
+        }
       }
       
       victim.takeDamage(damage, attacker);
@@ -2027,16 +2210,18 @@
         { canHitOwner: true }
       );
       projectiles.push(leo);
+      audio.shoot();
     }
 
     function calculateHopperDamage(hopper, victim, isDirect) {
-      const distance = hopper.abilityData.lastJumpDistance || canvas.width;
+      const distance = hopper.abilityData.lastHopDistance || canvas.width * 0.5;
+      const arenaSize = Math.hypot(canvas.width, canvas.height);
       
-      if (distance >= canvas.width * 0.8) { // Long jump
+      if (distance >= arenaSize * 0.8) { // Long hop
         return isDirect ? 8 : 6;
-      } else if (distance >= canvas.width * 0.4) { // Medium jump
+      } else if (distance >= arenaSize * 0.4) { // Medium hop
         return isDirect ? 5 : 3;
-      } else { // Short jump
+      } else { // Short hop
         return isDirect ? 2 : 1;
       }
     }
@@ -2050,11 +2235,13 @@
       // Handle specific projectile types
       switch(projectile.type) {
         case "fire":
-          // Apply Hell's Trial multiplier
-          const demonlord = projectile.owner;
-          const multiplier = demonlord.abilityData.hellsTrialCount || 1;
-          character.takeDamage(damage * multiplier, projectile.owner);
-          // Add burn effect
+          // Calculate Hell's Trial multiplier
+          const fireOwner = projectile.owner;
+          const multiplier = fireOwner.abilityData.hellsTrialTriggers || 1;
+          const totalDamage = damage * multiplier;
+          character.takeDamage(totalDamage, projectile.owner);
+          
+          // Apply burn effect (1 damage after delay)
           setTimeout(() => {
             if (!character.isDead) {
               character.takeDamage(1);
@@ -2076,11 +2263,7 @@
           break;
           
         case "coin":
-          if (!projectile.data.directHit && character !== projectile.owner) {
-            projectile.data.directHit = true;
-            damage = 2; // Jackpot Strike
-            projectile.owner.heal(1);
-          } else if (character === projectile.owner) {
+          if (character === projectile.owner) {
             // Gamemaster caught his own coin
             projectile.owner.abilityData.coinsCollected++;
             if (projectile.owner.abilityData.coinsCollected >= 20) {
@@ -2088,33 +2271,124 @@
               projectile.owner.abilityData.coinsCollected = 0;
             }
             removeProjectile = true;
-            return; // Don't damage owner
+            return;
+          } else {
+            // Hit enemy
+            const isJackpotStrike = projectile.data.bounceCount === 0;
+            const finalDamage = isJackpotStrike ? 2 : 1;
+            character.takeDamage(finalDamage, projectile.owner);
+            if (isJackpotStrike) {
+              projectile.owner.heal(1);
+            }
           }
-          character.takeDamage(damage, projectile.owner);
           break;
           
         case "redBall":
-          if (projectile.data.bounces >= 10) {
-            damage = 5; // 10th Impact
+          const mimicOwner = projectile.owner;
+          let ballDamage = 1;
+          
+          if (projectile.data.bounces >= 9) { // 10th bounce (0-indexed)
+            ballDamage = 5; // 10th Impact
           }
-          character.takeDamage(damage, projectile.owner);
+          
+          character.takeDamage(ballDamage, projectile.owner);
+          projectile.data.bounces++;
           
           // Greatest Mimicry
-          if (projectile.owner.emoji === "🤡" && !projectile.owner.abilityData.mimicking) {
+          if (character !== mimicOwner && mimicOwner.emoji === "🤡" && !mimicOwner.abilityData.mimicking) {
             const now = gameTime;
-            if (now - projectile.owner.abilityData.lastMimicTime > 600) { // 10 second cooldown
-              projectile.owner.abilityData.mimicking = true;
-              projectile.owner.abilityData.mimicUntil = now + 300; // 5 seconds
-              projectile.owner.abilityData.lastMimicTime = now;
-              projectile.owner.abilityData.originalEmoji = projectile.owner.emoji;
-              projectile.owner.emoji = character.emoji; // Transform
-              projectile.owner.abilityData.balloonCount = 0;
+            if (now - mimicOwner.abilityData.lastMimicTime > 600) { // 10 second cooldown
+              mimicOwner.abilityData.mimicking = true;
+              mimicOwner.abilityData.mimicUntil = now + 300; // 5 seconds
+              mimicOwner.abilityData.lastMimicTime = now;
+              mimicOwner.abilityData.originalEmoji = mimicOwner.emoji;
+              mimicOwner.emoji = character.emoji; // Transform
+              mimicOwner.abilityData.balloonCount = 0;
+              mimicOwner.invulnerable = true;
+              mimicOwner.invulnerableUntil = now + 300;
             }
           }
           
-          if (projectile.data.bounces < 10) {
+          if (projectile.data.bounces >= 10) {
+            mimicOwner.abilityData.hasActiveBall = false;
+            removeProjectile = true;
+          } else {
             removeProjectile = false;
           }
+          break;
+          
+        case "bat":
+          // Check if enemy is on web
+          const trickerOwner = projectile.owner;
+          let isOnWeb = false;
+          trickerOwner.abilityData.webs.forEach((web, index) => {
+            const distance = Math.hypot(character.x - web.x, character.y - web.y);
+            if (distance < 30) { // Web trap radius
+              isOnWeb = true;
+              character.freeze(300); // 5 seconds
+              trickerOwner.abilityData.webs.splice(index, 1); // Remove web
+            }
+          });
+          
+          const batDamage = isOnWeb ? 5 : 1;
+          character.takeDamage(batDamage, projectile.owner);
+          removeProjectile = false; // Bat continues bouncing
+          break;
+          
+        case "boulder":
+          character.takeDamage(damage, projectile.owner);
+          
+          // Spawn blood drops at impact
+          const bloodCount = projectile.data.boulderSize === "giant" ? 4 : 
+                            projectile.data.boulderSize === "medium" ? 2 : 1;
+          
+          for (let i = 0; i < bloodCount; i++) {
+            projectile.owner.abilityData.bloodDrops.push({
+              x: character.x + (Math.random() - 0.5) * 40,
+              y: character.y + (Math.random() - 0.5) * 40,
+              age: 0
+            });
+          }
+          break;
+          
+        case "dangerSkull":
+          if (character === projectile.owner) {
+            removeProjectile = true; // Disappear when hitting owner
+            projectile.owner.abilityData.activeSkulls--;
+          } else {
+            character.takeDamage(damage, projectile.owner);
+          }
+          break;
+          
+        case "balloon":
+          character.takeDamage(damage, projectile.owner);
+          break;
+          
+        case "angelBlock":
+          if (projectile.data.phase === 'black') {
+            character.takeDamage(damage, projectile.owner);
+            // Track if this completes black sequence
+            if (projectile.data.index === 2) { // Last block in sequence
+              projectile.owner.abilityData.blackComplete = true;
+            }
+          } else {
+            // White blocks heal owner
+            projectile.owner.heal(projectile.data.heal);
+            if (projectile.data.index === 2) { // Last block in sequence
+              projectile.owner.abilityData.whiteComplete = true;
+            }
+          }
+          break;
+          
+        case "enhancedBlock":
+          character.takeDamage(damage, projectile.owner);
+          if (projectile.data.heal) {
+            projectile.owner.heal(projectile.data.heal);
+          }
+          break;
+          
+        case "card":
+          handleCardEffect(projectile, character);
           break;
           
         case "windslash":
@@ -2132,10 +2406,23 @@
           character.takeDamage(damage, projectile.owner);
           projectile.owner.abilityData.moonHits++;
           if (projectile.owner.abilityData.moonHits >= 3) {
-            // Trigger Full Moon
-            projectiles = projectiles.filter(p => p.type !== "moon"); // Remove all moons
+            // Remove all moons and trigger Full Moon
+            projectiles = projectiles.filter(p => p.type !== "moon");
             triggerFullMoon(projectile.owner);
             projectile.owner.abilityData.moonHits = 0;
+          }
+          break;
+          
+        case "fullMoon":
+          if (character === projectile.owner) {
+            // Hit Moonhowl - buff mode
+            projectile.owner.abilityData.buffActive = true;
+            projectile.owner.abilityData.buffUntil = gameTime + 720; // 12 seconds
+            projectile.owner.size = projectile.owner.originalSize * 2;
+            projectile.owner.abilityData.buffLevel = (projectile.owner.abilityData.buffLevel || 0) + 1;
+          } else {
+            // Hit enemy - 8 damage
+            character.takeDamage(8, projectile.owner);
           }
           break;
           
@@ -2143,73 +2430,29 @@
           if (!character.frozen) {
             const freezeDuration = (projectile.owner.abilityData.frozenHits + 1) * 60 + 180; // 3+ seconds
             character.freeze(freezeDuration);
-            character.takeDamage(1, projectile.owner); // 1 damage per second while frozen
+            
+            // 1 damage per second while frozen
+            const damageInterval = setInterval(() => {
+              if (character.frozen && !character.isDead) {
+                character.takeDamage(1, projectile.owner);
+              } else {
+                clearInterval(damageInterval);
+              }
+            }, 1000);
+            
             projectile.owner.abilityData.frozenHits++;
+            
+            if (projectile.owner.abilityData.frozenHits >= 10) {
+              projectile.owner.abilityData.executionReady = true;
+            }
           } else {
             removeProjectile = false; // Bounce off frozen enemy
           }
           break;
           
-        case "balloon":
+        case "leaf":
           character.takeDamage(damage, projectile.owner);
-          break;
-          
-        case "angelBlock":
-          character.takeDamage(damage, projectile.owner);
-          if (projectile.data.phase === 'black') {
-            projectile.owner.abilityData.blackHits++;
-          } else {
-            projectile.owner.abilityData.whiteHits++;
-            projectile.owner.heal(damage); // White blocks heal owner
-          }
-          break;
-          
-        case "enhancedBlock":
-          character.takeDamage(damage, projectile.owner);
-          if (projectile.data.heal) {
-            projectile.owner.heal(projectile.data.heal);
-          }
-          // Enhanced blocks can block other projectiles
-          projectiles = projectiles.filter(p => {
-            if (p !== projectile && p.checkCollision({ x: projectile.x, y: projectile.y, size: projectile.size })) {
-              return false; // Remove blocked projectile
-            }
-            return true;
-          });
-          break;
-          
-        case "card":
-          handleCardEffect(projectile, character);
-          break;
-          
-        case "leo":
-          if (character === projectile.owner) {
-            // Leo hits Kingstone - evolve into Pride member
-            const prideMember = {
-              x: projectile.x,
-              y: projectile.y,
-              vx: projectile.vx,
-              vy: projectile.vy,
-              hp: 10 + projectile.owner.abilityData.pride.length * 5,
-              maxHp: 10 + projectile.owner.abilityData.pride.length * 5,
-              isDead: false
-            };
-            projectile.owner.abilityData.pride.push(prideMember);
-            
-            // Boost all pride members
-            projectile.owner.abilityData.pride.forEach(member => {
-              member.hp += 5;
-              member.maxHp += 5;
-            });
-          }
-          break;
-          
-        case "dangerSkull":
-          if (character !== projectile.owner) {
-            character.takeDamage(damage, projectile.owner);
-          } else {
-            removeProjectile = true; // Disappear when hitting owner
-          }
+          character.freeze(60); // 1 second stun
           break;
       }
       
@@ -2230,6 +2473,7 @@
         "🌕", 8, moonhowl, "fullMoon"
       );
       projectiles.push(fullMoon);
+      audio.ability();
     }
 
     function handleCardEffect(projectile, character) {
