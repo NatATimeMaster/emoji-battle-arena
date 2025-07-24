@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antarticus Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        canvas {
+            border: 2px solid #16213e;
+            background: #0f3460;
+        }
+        
+        .controls {
+            margin: 10px 0;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #c73650;
+        }
+        
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+
+        .frozen {
+            filter: brightness(0.7) sepia(1) hue-rotate(180deg) saturate(2);
+            animation: freeze-pulse 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes freeze-pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.05); }
+        }
+
+        .polar-execution-charging {
+            animation: polar-charge 0.3s ease-in-out infinite alternate;
+            filter: brightness(1.5) contrast(1.2);
+        }
+
+        @keyframes polar-charge {
+            from { 
+                transform: scale(1) rotate(0deg);
+                filter: brightness(1.5) hue-rotate(180deg);
+            }
+            to { 
+                transform: scale(1.1) rotate(5deg);
+                filter: brightness(2) hue-rotate(200deg);
+            }
+        }
+
+        .polar-execution-success {
+            animation: polar-success 0.5s ease-out;
+            filter: brightness(3) saturate(2);
+        }
+
+        @keyframes polar-success {
+            0% { 
+                transform: scale(1.5) rotate(0deg);
+                filter: brightness(3) hue-rotate(270deg);
+            }
+            50% { 
+                transform: scale(2) rotate(180deg);
+                filter: brightness(4) hue-rotate(290deg);
+            }
+            100% { 
+                transform: scale(1) rotate(360deg);
+                filter: brightness(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🐻‍❄️ Antarticus Test</h1>
+    
+    <div class="info">
+        <strong>Antarticus Abilities:</strong><br>
+        • Shoots ❄️ Frozeflakes every 3 seconds<br>
+        • Frozen Veins: Escalating freeze duration + DoT<br>
+        • Direct Hit: Only works when enemy is frozen (3 damage)<br>
+        • Polar Execution: After 10 hits, charges for 10 damage
+    </div>
+    
+    <div class="controls">
+        <button onclick="startTest()">Start Test</button>
+        <button onclick="resetTest()">Reset</button>
+        <button onclick="testDirectHit()">Test Direct Hit</button>
+        <button onclick="testPolarExecution()">Test Polar Execution</button>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="status" class="info">
+        Status: Ready to test
+    </div>
+
+    <script src="antarticus.js"></script>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        
+        let antarticus = null;
+        let enemy = null;
+        let projectiles = [];
+        let gameRunning = false;
+        
+        // Simple Audio Manager
+        class AudioManager {
+            constructor() {
+                this.audioContext = null;
+                this.initAudio();
+            }
+            
+            initAudio() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) {
+                    console.warn('Audio not supported');
+                }
+            }
+            
+            playTone(frequency, duration, volume = 0.1) {
+                if (!this.audioContext) return;
+                
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+                
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + duration);
+            }
+            
+            shoot() { this.playTone(440, 0.1); }
+            hit() { this.playTone(220, 0.2); }
+            ability() { this.playTone(660, 0.3); }
+            bounce() { this.playTone(330, 0.1); }
+            death() { this.playTone(110, 0.5); }
+        }
+        
+        const audio = new AudioManager();
+        
+        // Simple Character Class
+        class TestCharacter {
+            constructor(emoji, x, y) {
+                this.emoji = emoji;
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() * 2 - 1) * 2;
+                this.vy = (Math.random() * 2 - 1) * 2;
+                this.size = 20;
+                this.hp = emoji === "🐻‍❄️" ? 95 : 80; // Antarticus vs Enemy
+                this.maxHp = this.hp;
+                this.isDead = false;
+                this.isFrozen = false;
+                this.frozenUntil = 0;
+                this.element = { classList: { add: () => {}, remove: () => {} } };
+                this.abilityData = {};
+                this.statusEffects = new Map();
+                this.lastAbilityTime = 0;
+                
+                if (emoji === "🐻‍❄️") {
+                    AntarticusModule.initializeAbilities(this);
+                }
+            }
+            
+            update() {
+                const currentTime = Date.now();
+                
+                // Handle freeze effect
+                if (this.isFrozen && currentTime < this.frozenUntil) {
+                    return; // Can't move while frozen
+                }
+                if (this.isFrozen && currentTime >= this.frozenUntil) {
+                    this.isFrozen = false;
+                    console.log(`${this.emoji} is no longer frozen`);
+                }
+                
+                // Movement
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundary checking
+                if (this.x <= this.size || this.x >= canvas.width - this.size) {
+                    this.vx = -this.vx;
+                    this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                }
+                if (this.y <= this.size || this.y >= canvas.height - this.size) {
+                    this.vy = -this.vy;
+                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                }
+                
+                // Abilities for Antarticus
+                if (this.emoji === "🐻‍❄️") {
+                    AntarticusModule.handleAbilities(this);
+                }
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Frozen effect
+                if (this.isFrozen) {
+                    ctx.filter = 'brightness(0.7) sepia(1) hue-rotate(180deg) saturate(2)';
+                }
+                
+                ctx.fillText(this.emoji, this.x, this.y);
+                
+                // HP Bar
+                ctx.restore();
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x - 20, this.y - 30, 40, 4);
+                ctx.fillStyle = 'green';
+                ctx.fillRect(this.x - 20, this.y - 30, 40 * (this.hp / this.maxHp), 4);
+                
+                // Freeze indicator
+                if (this.isFrozen) {
+                    ctx.fillStyle = 'cyan';
+                    ctx.font = '12px Arial';
+                    ctx.fillText('FROZEN', this.x, this.y + 30);
+                }
+            }
+            
+            takeDamage(amount) {
+                this.hp = Math.max(0, this.hp - amount);
+                console.log(`${this.emoji} took ${amount} damage! HP: ${this.hp}/${this.maxHp}`);
+                
+                if (this.hp <= 0) {
+                    this.isDead = true;
+                    console.log(`${this.emoji} died!`);
+                }
+            }
+            
+            freeze(duration) {
+                this.isFrozen = true;
+                this.frozenUntil = Date.now() + duration;
+                console.log(`${this.emoji} frozen for ${duration}ms`);
+            }
+            
+            checkCollision(other) {
+                const dx = this.x - other.x;
+                const dy = this.y - other.y;
+                const distance = Math.hypot(dx, dy);
+                return distance < (this.size + other.size);
+            }
+        }
+        
+        // Simple Projectile Class
+        class TestProjectile {
+            constructor(x, y, vx, vy, emoji, type = '') {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.emoji = emoji;
+                this.type = type;
+                this.size = 10;
+                this.bounces = 0;
+                this.maxBounces = 5;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Boundary bouncing
+                if (this.x <= this.size || this.x >= canvas.width - this.size) {
+                    this.vx = -this.vx;
+                    this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                    this.bounces++;
+                }
+                if (this.y <= this.size || this.y >= canvas.height - this.size) {
+                    this.vy = -this.vy;
+                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                    this.bounces++;
+                }
+                
+                // Frozeflake-specific update
+                if (this.type === "frozeflake") {
+                    this.handleFrozeflakeUpdate();
+                }
+                
+                return this.bounces < this.maxBounces;
+            }
+            
+            handleFrozeflakeUpdate() {
+                if (this.bounces >= 5) {
+                    return false; // Should be removed
+                }
+                return true;
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                if (this.type === "frozeflake") {
+                    ctx.shadowColor = "#87ceeb";
+                    ctx.shadowBlur = 12;
+                }
+                
+                ctx.fillText(this.emoji, this.x, this.y);
+                ctx.restore();
+            }
+            
+            checkCollision(character) {
+                const dx = this.x - character.x;
+                const dy = this.y - character.y;
+                const distance = Math.hypot(dx, dy);
+                return distance < (this.size + character.size);
+            }
+        }
+        
+        function startTest() {
+            // Initialize characters
+            antarticus = new TestCharacter("🐻‍❄️", 150, 300);
+            enemy = new TestCharacter("👾", 650, 300);
+            
+            projectiles = [];
+            gameRunning = true;
+            
+            // Start game loop
+            gameLoop();
+            
+            statusDiv.innerHTML = "Test started! Antarticus should start shooting Frozeflakes...";
+        }
+        
+        function resetTest() {
+            gameRunning = false;
+            antarticus = null;
+            enemy = null;
+            projectiles = [];
+            
+            // Reset module state
+            if (window.AntarticusModule) {
+                AntarticusModule.frozeflakeProjectiles = [];
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            statusDiv.innerHTML = "Test reset. Click Start Test to begin.";
+        }
+        
+        function testDirectHit() {
+            if (!antarticus || !enemy) {
+                statusDiv.innerHTML = "Start test first!";
+                return;
+            }
+            
+            // Freeze enemy first
+            enemy.freeze(5000);
+            
+            // Test direct hit
+            setTimeout(() => {
+                if (window.AntarticusModule) {
+                    const handled = AntarticusModule.handleDirectHit(antarticus, enemy);
+                    statusDiv.innerHTML = `Direct hit test: ${handled ? 'SUCCESS' : 'FAILED'} - Enemy frozen: ${enemy.isFrozen}`;
+                }
+            }, 100);
+        }
+        
+        function testPolarExecution() {
+            if (!antarticus || !enemy) {
+                statusDiv.innerHTML = "Start test first!";
+                return;
+            }
+            
+            // Set hit count to 9 so next hit triggers execution
+            if (antarticus.abilityData) {
+                antarticus.abilityData.hitCount = 9;
+                statusDiv.innerHTML = "Hit count set to 9. Next Frozeflake hit should trigger Polar Execution!";
+            }
+        }
+        
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Clear canvas
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update characters
+            if (antarticus && !antarticus.isDead) {
+                antarticus.update();
+                antarticus.draw(ctx);
+            }
+            if (enemy && !enemy.isDead) {
+                enemy.update();
+                enemy.draw(ctx);
+            }
+            
+            // Update projectiles
+            projectiles = projectiles.filter(projectile => {
+                const shouldKeep = projectile.update();
+                if (shouldKeep) {
+                    projectile.draw(ctx);
+                    
+                    // Check collisions with enemy
+                    if (enemy && !enemy.isDead && projectile.checkCollision(enemy)) {
+                        if (projectile.type === "frozeflake" && window.AntarticusModule) {
+                            AntarticusModule.handleFrozeflakeHit(projectile, enemy);
+                            return false; // Remove projectile
+                        }
+                    }
+                    
+                    return true;
+                }
+                return false;
+            });
+            
+            // Draw status
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.fillText(`Antarticus HP: ${antarticus ? antarticus.hp : 0}`, 20, 30);
+            ctx.fillText(`Enemy HP: ${enemy ? enemy.hp : 0}`, 20, 50);
+            ctx.fillText(`Projectiles: ${projectiles.length}`, 20, 70);
+            if (antarticus && antarticus.abilityData) {
+                ctx.fillText(`Hit Count: ${antarticus.abilityData.hitCount || 0}/10`, 20, 90);
+                ctx.fillText(`Direct Hit Enabled: ${antarticus.abilityData.canDirectHit || false}`, 20, 110);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Override projectile creation for testing
+        window.createProjectile = function(x, y, vx, vy, emoji, type, data) {
+            const projectile = new TestProjectile(x, y, vx, vy, emoji, type);
+            if (data) {
+                Object.assign(projectile, data);
+            }
+            projectiles.push(projectile);
+            return projectile;
+        };
+        
+        // Initialize audio on user interaction
+        canvas.addEventListener('click', () => {
+            if (audio.audioContext && audio.audioContext.state === 'suspended') {
+                audio.audioContext.resume();
+            }
+        });
+    </script>
+</body>
+</html>
