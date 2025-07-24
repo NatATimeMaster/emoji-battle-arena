@@ -573,6 +573,7 @@
   <script src="clawhard.js"></script>
   <script src="kingstone.js"></script>
   <script src="moonhowl.js"></script>
+  <script src="antarticus.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -727,6 +728,10 @@
         
         if (this.type === "moon" || this.type === "fullmoon" || this.type === "guaranteedmoon" || this.type === "wolfsense") {
           return this.handleMoonUpdate();
+        }
+        
+        if (this.type === "frozeflake") {
+          return this.handleFrozeflakeUpdate();
         }
 
         // Default projectile behavior
@@ -1107,6 +1112,52 @@
         return true;
       }
 
+      handleFrozeflakeUpdate() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        // Handle wall bouncing
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced) {
+          this.data.bounceCount++;
+          
+          // Disappear after 5th bounce
+          if (this.data.bounceCount >= this.data.maxBounces) {
+            const index = projectiles.indexOf(this);
+            if (index > -1) {
+              projectiles.splice(index, 1);
+            }
+            
+            if (window.AntarticusModule) {
+              const frozeIndex = AntarticusModule.frozeflakeProjectiles.indexOf(this);
+              if (frozeIndex > -1) {
+                AntarticusModule.frozeflakeProjectiles.splice(frozeIndex, 1);
+              }
+            }
+            
+            console.log(`❄️ Frozeflake disappeared after ${this.data.bounceCount} bounces`);
+            return false;
+          }
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -1242,10 +1293,14 @@
           // Wolfsense - eerie blue glow
           ctx.shadowColor = "#00bfff";
           ctx.shadowBlur = 12;
-        } else if (this.type === "moon") {
-          // Regular Moon - soft silver glow
-          ctx.shadowColor = "#c0c0c0";
-          ctx.shadowBlur = 8;
+                 } else if (this.type === "moon") {
+           // Regular Moon - soft silver glow
+           ctx.shadowColor = "#c0c0c0";
+           ctx.shadowBlur = 8;
+        } else if (this.type === "frozeflake") {
+          // Frozeflake - sky blue glow
+          ctx.shadowColor = "#87ceeb";
+          ctx.shadowBlur = 12;
         }
         
         ctx.fillText(this.emoji, this.x, this.y);
@@ -1332,6 +1387,9 @@
         if (window.MoonhowlModule) {
           MoonhowlModule.initializeAbilities(this);
         }
+        if (window.AntarticusModule) {
+          AntarticusModule.initializeAbilities(this);
+        }
         // Additional character modules will be added here
       }
 
@@ -1339,10 +1397,24 @@
         if (this.isDead) return;
 
         // Handle frozen state
-        if (this.frozen && gameTime < this.frozenUntil) {
-          return;
-        } else {
-          this.frozen = false;
+        // Handle freeze status
+        if (this.isFrozen) {
+          if (gameTime < this.frozenUntil) {
+            // Still frozen - skip movement and abilities
+            this.freezeTime = Math.max(0, this.freezeTime - 1);
+            return;
+          } else {
+            // Freeze expired
+            this.isFrozen = false;
+            this.freezeTime = 0;
+            
+            // Remove visual freeze effect
+            if (this.element) {
+              this.element.classList.remove('frozen');
+            }
+            
+            console.log(`❄️ Character unfrozen`);
+          }
         }
 
         // Handle invulnerability
@@ -1432,6 +1504,9 @@
         if (window.MoonhowlModule) {
           MoonhowlModule.handleAbilities(this);
         }
+        if (window.AntarticusModule) {
+          AntarticusModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1470,8 +1545,16 @@
       }
 
       freeze(duration) {
-        this.frozen = true;
+        this.isFrozen = true;
+        this.freezeTime = duration;
         this.frozenUntil = gameTime + duration;
+        
+        // Add visual freeze effect
+        if (this.element) {
+          this.element.classList.add('frozen');
+        }
+        
+        console.log(`❄️ Character frozen for ${duration/60} seconds`);
       }
 
       die() {
@@ -1514,6 +1597,9 @@
         }
         if (window.MoonhowlModule) {
           MoonhowlModule.handleCharacterDeath(this);
+        }
+        if (window.AntarticusModule) {
+          AntarticusModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1898,6 +1984,12 @@
         return; // Full Moons are removed within handler
       }
       
+      // Handle Frozeflake projectiles
+      if (projectile.type === "frozeflake" && window.AntarticusModule) {
+        AntarticusModule.handleFrozeflakeHit(projectile, character);
+        return; // Frozeflakes are removed within handler
+      }
+      
       // Default projectile hit
       character.takeDamage(projectile.damage, projectile.owner);
       audio.hit();
@@ -1980,12 +2072,19 @@
              victim.takeDamage(1, attacker);
              audio.hit();
            }
-        } else if (victim.emoji === "🐺" && window.MoonhowlModule) {
-          // Handle Wolfsense removal when Moonhowl is hit
-          MoonhowlModule.handleWolfsenseRemoval(victim);
-          // Basic collision damage
-          victim.takeDamage(1, attacker);
-          audio.hit();
+                 } else if (victim.emoji === "🐺" && window.MoonhowlModule) {
+           // Handle Wolfsense removal when Moonhowl is hit
+           MoonhowlModule.handleWolfsenseRemoval(victim);
+           // Basic collision damage
+           victim.takeDamage(1, attacker);
+           audio.hit();
+        } else if (attacker.emoji === "🐻‍❄️" && window.AntarticusModule) {
+           // Handle Antarticus direct hits (only when enemy is frozen)
+           const handled = AntarticusModule.handleDirectHit(attacker, victim);
+           if (!handled) {
+             // No direct hit damage if enemy not frozen
+             // Don't deal basic collision damage either
+           }
         } else {
           // Basic collision damage for other characters
           victim.takeDamage(1, attacker);
