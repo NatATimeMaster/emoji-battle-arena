@@ -106,7 +106,7 @@
       gap: 8px;
     }
 
-         .char-btn {
+              .char-btn {
        font-size: clamp(20px, 5vw, 28px);
        padding: 12px;
        background: rgba(255, 255, 255, 0.1);
@@ -130,7 +130,7 @@
       background: rgba(255, 255, 255, 0.2);
     }
 
-         .char-btn:active {
+              .char-btn:active {
        transform: scale(0.95);
        background: rgba(255, 255, 255, 0.3);
      }
@@ -1350,9 +1350,19 @@
 
     function createCharacterGrid(id, team) {
       const container = document.getElementById(id);
+      console.log('Creating character grid for:', id, 'team:', team);
+      console.log('Characters array:', characters);
+      console.log('Container element:', container);
+      
+      if (!container) {
+        console.error('Container element not found:', id);
+        return;
+      }
+      
       container.innerHTML = "";
       
-      characters.forEach(char => {
+      characters.forEach((char, index) => {
+        console.log('Adding character:', char.name, char.emoji);
         const btn = document.createElement("button");
         btn.classList.add("char-btn");
         btn.textContent = char.emoji;
@@ -1389,10 +1399,12 @@
         btn.addEventListener('touchend', function(e) {
           this.style.transform = '';
         });
-        
-        container.appendChild(btn);
-      });
-    }
+         
+         container.appendChild(btn);
+       });
+       
+       console.log('Finished creating grid. Container now has', container.children.length, 'buttons');
+     }
 
     function selectCharacter(char, team) {
       console.log('Selecting character:', char.name, 'for team:', team);
@@ -1936,7 +1948,7 @@
       updateStartButton();
     }
 
-         // Initialize
+              // Initialize
      document.addEventListener('DOMContentLoaded', function() {
        console.log('DOM loaded, initializing game...');
        createCharacterGrid("player1Chars", 1);
