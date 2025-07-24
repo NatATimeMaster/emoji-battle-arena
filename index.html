@@ -100,11 +100,14 @@
       box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
     }
 
-    .character-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
-      gap: 8px;
-    }
+         .character-grid {
+       display: grid;
+       grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+       gap: 8px;
+       pointer-events: auto;
+       position: relative;
+       z-index: 1;
+     }
 
               .char-btn {
        font-size: clamp(20px, 5vw, 28px);
@@ -119,10 +122,12 @@
        align-items: center;
        justify-content: center;
        position: relative;
-       overflow: hidden;
+       overflow: visible;
        user-select: none;
        -webkit-user-select: none;
-       -webkit-tap-highlight-color: transparent;
+       -webkit-tap-highlight-color: rgba(0,0,0,0);
+       pointer-events: auto;
+       z-index: 10;
      }
 
     .char-btn:hover {
@@ -1366,16 +1371,62 @@
         btn.className = "char-btn";
         btn.textContent = char.emoji;
         btn.title = char.name;
+        btn.type = "button";
         
-        btn.onclick = function() {
+        // Add multiple event handlers for better compatibility
+        btn.onclick = function(e) {
+          console.log('Button clicked:', char.name);
+          e.preventDefault();
+          e.stopPropagation();
           selectCharacter(char, team);
+          return false;
+        };
+        
+        btn.addEventListener('click', function(e) {
+          console.log('Click event:', char.name);
+          e.preventDefault();
+          e.stopPropagation();
+          selectCharacter(char, team);
+        }, true);
+        
+        btn.addEventListener('touchend', function(e) {
+          console.log('Touch event:', char.name);
+          e.preventDefault();
+          e.stopPropagation();
+          selectCharacter(char, team);
+        }, true);
+        
+        // Test if button is clickable
+        btn.style.pointerEvents = 'auto';
+        btn.style.position = 'relative';
+        btn.style.zIndex = '100';
+        
+        // Add visual feedback for debugging
+        btn.onmouseenter = function() {
+          console.log('Mouse entered:', char.name);
+          this.style.transform = 'scale(1.1)';
+          this.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
+        };
+        
+        btn.onmouseleave = function() {
+          this.style.transform = 'scale(1)';
+          this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
         };
         
         container.appendChild(btn);
       });
       
-      console.log('Grid created with', container.children.length, 'buttons');
-    }
+             console.log('Grid created with', container.children.length, 'buttons');
+       
+       // Test if buttons are clickable
+       setTimeout(() => {
+         const buttons = container.querySelectorAll('.char-btn');
+         console.log('Testing buttons:', buttons.length);
+         buttons.forEach((btn, i) => {
+           console.log(`Button ${i}: ${btn.textContent}, clickable: ${btn.onclick !== null}`);
+         });
+       }, 100);
+     }
 
     function selectCharacter(char, team) {
       console.log('Selecting character:', char.name, 'for team:', team);
