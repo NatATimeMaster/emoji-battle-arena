@@ -567,6 +567,7 @@
   <script src="deathblow.js"></script>
   <script src="mimic.js"></script>
   <script src="tricker.js"></script>
+  <script src="grinch.js"></script>
 
   <script>
     // Character definitions with emojis
@@ -697,6 +698,10 @@
         
         if (this.type === "bat") {
           return this.handleBatUpdate();
+        }
+        
+        if (this.type === "giantboulder" || this.type === "boulder" || this.type === "rock") {
+          return this.handleBoulderUpdate();
         }
 
         // Default projectile behavior
@@ -906,6 +911,38 @@
         return true;
       }
 
+      handleBoulderUpdate() {
+        // Handle wall bouncing and splitting for boulders
+        const margin = this.size / 2;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.GrinchModule) {
+          return GrinchModule.handleBoulderWallBounce(this);
+        }
+
+        return true;
+      }
+
       draw(ctx) {
         ctx.save();
         ctx.font = `${this.size * 2}px serif`;
@@ -955,6 +992,18 @@
           } else {
             ctx.shadowColor = "#4b0082";
             ctx.shadowBlur = 8;
+          }
+        } else if (this.type === "giantboulder" || this.type === "boulder" || this.type === "rock") {
+          // Boulder effects based on size
+          if (this.data.boulderType === "giant") {
+            ctx.shadowColor = "#8b4513";
+            ctx.shadowBlur = 15;
+          } else if (this.data.boulderType === "boulder") {
+            ctx.shadowColor = "#8b4513";
+            ctx.shadowBlur = 10;
+          } else if (this.data.boulderType === "rock") {
+            ctx.shadowColor = "#8b4513";
+            ctx.shadowBlur = 5;
           }
         }
         
@@ -1023,6 +1072,9 @@
         }
         if (window.TrickerModule) {
           TrickerModule.initializeAbilities(this);
+        }
+        if (window.GrinchModule) {
+          GrinchModule.initializeAbilities(this);
         }
         // Additional character modules will be added here
       }
@@ -1106,6 +1158,9 @@
         if (window.TrickerModule) {
           TrickerModule.handleAbilities(this);
         }
+        if (window.GrinchModule) {
+          GrinchModule.handleAbilities(this);
+        }
         // Additional character modules will be called here
       }
 
@@ -1165,6 +1220,9 @@
         }
         if (window.TrickerModule) {
           TrickerModule.handleCharacterDeath(this);
+        }
+        if (window.GrinchModule) {
+          GrinchModule.handleCharacterDeath(this);
         }
         
         // Create death animation
@@ -1507,6 +1565,12 @@
         return; // Bat continues bouncing
       }
       
+      // Handle boulder projectiles (giant boulder, boulder, rock)
+      if ((projectile.type === "giantboulder" || projectile.type === "boulder" || projectile.type === "rock") && window.GrinchModule) {
+        GrinchModule.handleBoulderHit(projectile, character);
+        return; // Boulders are removed or split within handler
+      }
+      
       // Default projectile hit
       character.takeDamage(projectile.damage, projectile.owner);
       audio.hit();
@@ -1613,6 +1677,9 @@
           if (window.TrickerModule) {
             TrickerModule.drawWebs(ctx, c);
             TrickerModule.drawClone(ctx, c);
+          }
+          if (window.GrinchModule) {
+            GrinchModule.drawBloodDrops(ctx, c);
           }
         }
       });
