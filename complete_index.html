@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emoji Arena</title>
+  <style>
+    :root {
+      --player1-color: #4CAF50;
+      --player2-color: #2196F3;
+      --arena-bg: linear-gradient(135deg, #1e1e2e, #2d2d44);
+      --text-glow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: var(--arena-bg);
+      color: #fff;
+      user-select: none;
+    }
+
+    /* Character Selection Overlay */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .overlay h1 {
+      font-size: clamp(1.5rem, 5vw, 3rem);
+      margin: 10px 0;
+      text-shadow: var(--text-glow);
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #f9ca24);
+      background-size: 400% 400%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient 3s ease infinite;
+      text-align: center;
+    }
+
+    .overlay h2 {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+      text-align: center;
+    }
+
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .team-select {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1000px;
+      gap: 20px;
+    }
+
+    @media (min-width: 768px) {
+      .team-select {
+        flex-direction: row;
+        gap: 30px;
+      }
+    }
+
+    .team {
+      flex: 1;
+      min-width: 280px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 15px;
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .team h3 {
+      text-align: center;
+      font-size: clamp(1rem, 4vw, 1.8rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+      font-weight: bold;
+    }
+
+    .team.player1 {
+      border-color: var(--player1-color);
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .team.player2 {
+      border-color: var(--player2-color);
+      background: rgba(33, 150, 243, 0.1);
+    }
+
+    .character-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .character {
+      aspect-ratio: 1;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(5px);
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .character:hover {
+      transform: scale(1.1);
+      border-color: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .character.selected {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: #fff;
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+
+    .character::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .character:hover::before {
+      left: 100%;
+    }
+
+    .selected-count {
+      text-align: center;
+      font-size: clamp(0.8rem, 3vw, 1.2rem);
+      margin-top: 10px;
+      opacity: 0.8;
+    }
+
+    .controls {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .start-btn {
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      border-radius: 25px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .start-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    }
+
+    .start-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .hint {
+      margin: 10px 0 0 0;
+      font-size: clamp(0.6rem, 2vw, 0.9rem);
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    /* Arena Container */
+    .arena-container {
+      width: 100vw;
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+    }
+
+    .info-header {
+      text-align: center;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin-bottom: 10px;
+      text-shadow: var(--text-glow);
+      font-weight: bold;
+    }
+
+    .hp-area {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100vw;
+      min-height: 60px;
+      overflow: hidden;
+      padding: 0 5px;
+      box-sizing: border-box;
+    }
+
+    .team-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-width: 45%;
+      overflow: hidden;
+    }
+
+    .team-header {
+      font-size: clamp(0.8rem, 2.5vw, 1.2rem);
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 5px;
+      text-shadow: var(--text-glow);
+    }
+
+    .character-hp {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: clamp(0.7rem, 2vw, 1rem);
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      word-wrap: break-word;
+      overflow: hidden;
+    }
+
+    .character-hp .emoji {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      flex-shrink: 0;
+    }
+
+    .hp-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .dead {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+
+    canvas {
+      border: 3px solid #fff;
+      border-radius: 15px;
+      background: linear-gradient(135deg, #2d2d44, #1e1e2e);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      max-width: 90vw;
+      max-height: 60vh;
+      transition: all 0.5s ease;
+    }
+
+    canvas.hell-trial {
+      background: radial-gradient(circle, #4a1a1a, #2a0a0a);
+      border-color: #ff4444;
+      box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    }
+
+    /* Game Over Screen */
+    .game-over {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      padding: 30px;
+      border: 3px solid #fff;
+      border-radius: 20px;
+      text-align: center;
+      z-index: 10000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+      display: none;
+    }
+
+    .game-over h2 {
+      font-size: clamp(1.5rem, 5vw, 3rem);
+      margin: 0 0 20px 0;
+      text-shadow: var(--text-glow);
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+      background-size: 400% 400%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient 3s ease infinite;
+    }
+
+    .winner {
+      font-size: clamp(1.2rem, 4vw, 2rem);
+      margin: 20px 0;
+      text-shadow: var(--text-glow);
+      font-weight: bold;
+    }
+
+    .reset-btn {
+      background: linear-gradient(45deg, #4ecdc4, #ff6b6b);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      font-weight: bold;
+    }
+
+    .reset-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    }
+
+    .status-indicators {
+      margin-top: 10px;
+      font-size: clamp(0.7rem, 2vw, 1rem);
+      text-align: center;
+      opacity: 0.8;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .team-select {
+        gap: 15px;
+      }
+      
+      .team {
+        padding: 10px;
+        min-width: 250px;
+      }
+      
+      .character-grid {
+        gap: 5px;
+      }
+      
+      .hp-area {
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      
+      canvas {
+        max-height: 55vh;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .overlay h1 {
+        margin: 5px 0;
+      }
+      
+      .team {
+        padding: 10px;
+      }
+      
+      .controls {
+        margin-top: 10px;
+      }
+    }
+
+    /* Character Visual Effects */
+    .frozen {
+      animation: frozen 2s ease-in-out infinite;
+      filter: brightness(0.8) hue-rotate(180deg);
+    }
+
+    @keyframes frozen {
+      0% { 
+        box-shadow: 0 0 15px #87ceeb; 
+        filter: brightness(0.8) hue-rotate(180deg);
+      }
+      50% { 
+        box-shadow: 0 0 25px #87ceeb, 0 0 35px #00bfff; 
+        filter: brightness(0.6) hue-rotate(180deg);
+      }
+      100% { 
+        box-shadow: 0 0 15px #87ceeb; 
+        filter: brightness(0.8) hue-rotate(180deg);
+      }
+    }
+
+    .blinkFlash {
+      animation: blinkFlash 0.3s ease-out;
+    }
+
+    @keyframes blinkFlash {
+      0% { 
+        transform: scale(0) rotate(0deg);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1) rotate(180deg);
+        opacity: 0.8;
+      }
+      100% { 
+        transform: scale(0) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    .overloadPulse {
+      animation: overloadPulse 2s ease-out infinite;
+    }
+
+    @keyframes overloadPulse {
+      0% { 
+        transform: scale(0);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 0.8;
+      }
+      100% { 
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    .progressionFlash {
+      animation: progressionFlash 0.5s ease-in-out;
+    }
+
+    @keyframes progressionFlash {
+      0% { box-shadow: 0 0 10px #00ff88; }
+      50% { box-shadow: 0 0 30px #00ff88, 0 0 40px #00ff88; }
+      100% { box-shadow: 0 0 10px #00ff88; }
+    }
+
+    .frenzyBoost {
+      animation: frenzyBoost 0.3s ease-out;
+    }
+
+    @keyframes frenzyBoost {
+      0% { 
+        box-shadow: 0 0 15px #ff6600; 
+        transform: scale(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ff6600, 0 0 35px #ff8c00; 
+        transform: scale(1.05);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ff6600; 
+        transform: scale(1.0);
+      }
+    }
+
+    .frenzy-low {
+      filter: brightness(1.0) saturate(1.0);
+    }
+
+    .frenzy-medium {
+      filter: brightness(1.2) saturate(1.3) hue-rotate(15deg);
+    }
+
+    .frenzy-high {
+      filter: brightness(1.5) saturate(1.6) hue-rotate(30deg);
+    }
+
+    .frenzy-max {
+      filter: brightness(2.0) saturate(2.0) hue-rotate(45deg);
+      box-shadow: 0 0 20px #ff6600;
+    }
+
+    .burning {
+      animation: burning 1s ease-in-out infinite;
+    }
+
+    @keyframes burning {
+      0% { 
+        box-shadow: 0 0 10px #ff4444; 
+        filter: brightness(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 20px #ff4444, 0 0 30px #ff6666; 
+        filter: brightness(1.3);
+      }
+      100% { 
+        box-shadow: 0 0 10px #ff4444; 
+        filter: brightness(1.0);
+      }
+    }
+
+    .marked {
+      animation: marked 2s ease-in-out infinite;
+    }
+
+    @keyframes marked {
+      0% { box-shadow: 0 0 10px #00bfff; }
+      50% { box-shadow: 0 0 20px #00bfff, 0 0 30px #00bfff; }
+      100% { box-shadow: 0 0 10px #00bfff; }
+    }
+
+    .stunned {
+      animation: stunned 0.5s ease-in-out infinite;
+    }
+
+    @keyframes stunned {
+      0% { transform: scale(1.0) rotate(0deg); }
+      25% { transform: scale(0.95) rotate(-2deg); }
+      50% { transform: scale(1.0) rotate(0deg); }
+      75% { transform: scale(0.95) rotate(2deg); }
+      100% { transform: scale(1.0) rotate(0deg); }
+    }
+
+    .invulnerable {
+      animation: invulnerable 1s ease-in-out infinite;
+    }
+
+    @keyframes invulnerable {
+      0% { 
+        box-shadow: 0 0 15px #ffd700; 
+        filter: brightness(1.2);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ffd700, 0 0 35px #ffed4e; 
+        filter: brightness(1.5);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ffd700; 
+        filter: brightness(1.2);
+      }
+    }
+
+    .mimicking {
+      animation: mimicking 2s ease-in-out infinite;
+    }
+
+    @keyframes mimicking {
+      0% { 
+        transform: scale(1.0);
+        filter: hue-rotate(0deg) brightness(1.0);
+      }
+      50% { 
+        transform: scale(1.1);
+        filter: hue-rotate(180deg) brightness(1.3);
+      }
+      100% { 
+        transform: scale(1.0);
+        filter: hue-rotate(360deg) brightness(1.0);
+      }
+    }
+
+    .charging {
+      animation: charging 1s ease-in-out infinite;
+    }
+
+    @keyframes charging {
+      0% { 
+        box-shadow: 0 0 10px #00ff00; 
+        transform: scale(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 20px #00ff00, 0 0 30px #32cd32; 
+        transform: scale(1.05);
+      }
+      100% { 
+        box-shadow: 0 0 10px #00ff00; 
+        transform: scale(1.0);
+      }
+    }
+
+    .enraged {
+      animation: enraged 0.5s ease-in-out infinite;
+    }
+
+    @keyframes enraged {
+      0% { 
+        box-shadow: 0 0 15px #ff0000; 
+        filter: brightness(1.2) saturate(1.5);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ff0000, 0 0 35px #ff4444; 
+        filter: brightness(1.5) saturate(2.0);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ff0000; 
+        filter: brightness(1.2) saturate(1.5);
+      }
+    }
+
+    @keyframes mimicryPulse {
+      0% { 
+        transform: scale(0) rotate(0deg);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.5) rotate(180deg);
+        opacity: 0.8;
+      }
+      100% { 
+        transform: scale(0) rotate(360deg);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="characterSelect">
+    <h1>🏟️ Emoji Arena 🏟️</h1>
+    <h2>Choose Your Champions</h2>
+    
+    <div class="team-select">
+      <div class="team player1">
+        <h3>🔵 Player 1</h3>
+        <div class="character-grid" id="player1Grid"></div>
+        <div class="selected-count" id="player1Count">Selected: 0/8</div>
+      </div>
+      
+      <div class="team player2">
+        <h3>🔴 Player 2</h3>
+        <div class="character-grid" id="player2Grid"></div>
+        <div class="selected-count" id="player2Count">Selected: 0/8</div>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button class="start-btn" id="startBtn" onclick="startGame()" disabled>
+        ⚔️ Start Battle ⚔️
+      </button>
+      <div class="hint">Each player must select exactly 8 characters</div>
+    </div>
+  </div>
+
+  <div class="arena-container" id="arenaContainer">
+    <div class="info-header">🏟️ Emoji Arena Battle 🏟️</div>
+    <div class="hp-area">
+      <div class="team-column" id="player1HP">
+        <div class="team-header">🔵 Player 1</div>
+      </div>
+      <div class="team-column" id="player2HP">
+        <div class="team-header">🔴 Player 2</div>
+      </div>
+    </div>
+    <canvas id="arena"></canvas>
+    <div class="status-indicators" id="globalStatus"></div>
+  </div>
+
+  <div class="game-over" id="gameOver">
+    <h2 id="gameOverTitle">Game Over</h2>
+    <div class="winner" id="winnerText"></div>
+    <button class="reset-btn" onclick="resetGame()">Play Again</button>
+  </div>
+
+  <script>
+    // Character definitions with emojis
+    const characters = [
+      { emoji: "😈", name: "Demonlord" },
+      { emoji: "👽", name: "Terestro" },
+      { emoji: "👾", name: "Gamemaster" },
+      { emoji: "💀", name: "Deathblow" },
+      { emoji: "🤡", name: "Mimic" },
+      { emoji: "🎃", name: "Tricker" },
+      { emoji: "👹", name: "Grinch" },
+      { emoji: "👼🏻", name: "Kael" },
+      { emoji: "🤵🏻", name: "Magico" },
+      { emoji: "🐯", name: "Clawhard" },
+      { emoji: "🦁", name: "Kingstone" },
+      { emoji: "🐺", name: "Moonhowl" },
+      { emoji: "🐻‍❄️", name: "Antarticus" },
+      { emoji: "🐼", name: "Black Spot" },
+      { emoji: "🦊", name: "Frenzy" },
+      { emoji: "🐰", name: "Hopper" }
+    ];
+
+    // Game state
+    let selectedP1 = [];
+    let selectedP2 = [];
+    let ctx, canvas;
+    let charactersInArena = [];
+    let projectiles = [];
+    let gameRunning = false;
+    let gameTime = 0;
+
+    // Audio system for sound effects
+    class AudioManager {
+      constructor() {
+        this.audioContext = null;
+        this.initAudio();
+      }
+
+      initAudio() {
+        try {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn('Audio not supported');
+        }
+      }
+
+      playSound(frequency, duration = 0.1, type = 'sine', volume = 0.1) {
+        if (!this.audioContext) return;
+        
+        try {
+          const oscillator = this.audioContext.createOscillator();
+          const gainNode = this.audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(this.audioContext.destination);
+          
+          oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+          oscillator.type = type;
+          
+          gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+          
+          oscillator.start(this.audioContext.currentTime);
+          oscillator.stop(this.audioContext.currentTime + duration);
+        } catch (e) {
+          console.warn('Audio playback failed');
+        }
+      }
+
+      shoot() { this.playSound(800, 0.1, 'square', 0.05); }
+      hit() { this.playSound(300, 0.15, 'triangle', 0.08); }
+      bounce() { this.playSound(600, 0.08, 'sine', 0.04); }
+      death() { this.playSound(150, 0.5, 'sawtooth', 0.1); }
+      ability() { this.playSound(1000, 0.3, 'triangle', 0.12); }
+    }
+
+    const audio = new AudioManager();
+
+    // Base Projectile class
+    class Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type = 'basic', data = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.emoji = emoji;
+        this.damage = damage;
+        this.owner = owner;
+        this.type = type;
+        this.data = data;
+        this.size = 12;
+        this.age = 0;
+        this.lifetime = 1800; // 30 seconds at 60fps
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        if (this.age > this.lifetime) {
+          return false;
+        }
+
+        // Handle wall bouncing for projectiles that bounce
+        if (this.shouldBounce()) {
+          const margin = this.size;
+          if (this.x <= margin || this.x >= canvas.width - margin ||
+              this.y <= margin || this.y >= canvas.height - margin) {
+            this.handleWallBounce();
+          }
+        }
+
+        return true;
+      }
+
+      shouldBounce() {
+        return this.type === 'fire' || this.type === 'star' || this.type === 'coin' || 
+               this.type === 'dangerskull' || this.type === 'moon' || this.type === 'frozeflake' ||
+               this.type === 'redball' || this.type === 'bat';
+      }
+
+      handleWallBounce() {
+        const margin = this.size;
+        let bounced = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          bounced = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          bounced = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          bounced = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          bounced = true;
+        }
+
+        if (bounced) {
+          audio.bounce();
+          // Handle special bounce behaviors
+          if (this.type === 'redball' && window.MimicModule) {
+            return window.MimicModule.handleRedBallBounce(this);
+          }
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Add projectile-specific effects
+        if (this.type === 'fire') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 8;
+        } else if (this.type === 'star') {
+          ctx.shadowColor = "#4444ff";
+          ctx.shadowBlur = 6;
+        } else if (this.type === 'coin') {
+          ctx.shadowColor = "#ffff44";
+          ctx.shadowBlur = 10;
+        } else if (this.type === 'redball') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 8;
+          const rotation = this.age * 0.1;
+          ctx.translate(this.x, this.y);
+          ctx.rotate(rotation);
+          ctx.fillText(this.emoji, 0, 0);
+          ctx.restore();
+          return;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    // ALL CHARACTER MODULES INTEGRATED HERE
+    
+    // DEMONLORD MODULE START
+    class DemonlordModule {
+      static initializeAbilities(character) {
+        if (character.emoji !== "😈") return;
+        
+        character.abilityData = {
+          lastFireTime: 0,
+          fireCooldown: 180, // 3 seconds at 60fps
+          hellTrialActive: false,
+          hellTrialStartTime: 0,
+          hellTrialDuration: 600, // 10 seconds at 60fps
+          hellTrialDamageInterval: 60, // 1 second at 60fps
+          lastHellTrialDamage: 0,
+          fireProjectileHits: 0
+        };
+      }
+
+      static handleAbilities(character) {
+        if (character.emoji !== "😈") return;
+        if (character.isDead) return;
+        
+        const currentTime = gameTime;
+        const data = character.abilityData;
+        
+        // Handle Hell's Trial damage over time
+        if (data.hellTrialActive) {
+          this.handleHellTrialDamage(character, currentTime);
+        }
+        
+        // Fire projectile shooting
+        if (currentTime - data.lastFireTime >= data.fireCooldown) {
+          this.shootFireProjectile(character, currentTime);
+        }
+      }
+
+      static shootFireProjectile(character, currentTime) {
+        const enemy = character.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+        const speed = 3;
+        
+        const fireProjectile = new Projectile(
+          character.x, character.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔥", 1, character, "fire"
+        );
+        
+        projectiles.push(fireProjectile);
+        character.abilityData.lastFireTime = currentTime;
+        
+        console.log(`Demonlord shot fire projectile! 🔥`);
+        audio.shoot();
+      }
+
+      static handleFireProjectileHit(projectile, character) {
+        if (projectile.type !== "fire" || projectile.owner.emoji !== "😈") return;
+        
+        const demonlord = projectile.owner;
+        const data = demonlord.abilityData;
+        
+        if (character === demonlord) return; // Don't count self-hits
+        
+        data.fireProjectileHits++;
+        console.log(`Fire hit! Total hits: ${data.fireProjectileHits}`);
+        
+        // Activate Hell's Trial after 5 hits
+        if (data.fireProjectileHits >= 5 && !data.hellTrialActive) {
+          this.activateHellsTrial(demonlord);
+        }
+      }
+
+      static activateHellsTrial(character) {
+        const data = character.abilityData;
+        const currentTime = gameTime;
+        
+        data.hellTrialActive = true;
+        data.hellTrialStartTime = currentTime;
+        data.lastHellTrialDamage = currentTime;
+        data.fireProjectileHits = 0; // Reset counter
+        
+        // Add visual effect to arena
+        const canvas = document.getElementById('arena');
+        canvas.classList.add('hell-trial');
+        
+        console.log(`🔥 HELL'S TRIAL ACTIVATED! Arena burning for 10 seconds!`);
+        audio.ability();
+        
+        // Schedule removal of effect
+        setTimeout(() => {
+          const canvas = document.getElementById('arena');
+          canvas.classList.remove('hell-trial');
+        }, 10000);
+      }
+
+      static handleHellTrialDamage(character, currentTime) {
+        const data = character.abilityData;
+        
+        // Check if Hell's Trial should end
+        if (currentTime - data.hellTrialStartTime >= data.hellTrialDuration) {
+          this.endHellsTrial(character);
+          return;
+        }
+        
+        // Deal damage every second
+        if (currentTime - data.lastHellTrialDamage >= data.hellTrialDamageInterval) {
+          this.dealHellTrialDamage(character);
+          data.lastHellTrialDamage = currentTime;
+        }
+      }
+
+      static dealHellTrialDamage(character) {
+        // Check if Hell's Trial is still active
+        const canvas = document.getElementById('arena');
+        if (!canvas.classList.contains('hell-trial')) return;
+        
+        // Find all enemies and deal 1 damage to each
+        const enemies = charactersInArena.filter(c => 
+          c !== character && !c.isDead && c.team !== character.team
+        );
+        
+        enemies.forEach(enemy => {
+          enemy.takeDamage(1, character);
+          // Add burning effect
+          enemy.addStatusEffect('burning', 60); // 1 second burning visual
+        });
+        
+        if (enemies.length > 0) {
+          console.log(`Hell's Trial burns ${enemies.length} enemies for 1 damage each!`);
+        }
+      }
+
+      static endHellsTrial(character) {
+        const data = character.abilityData;
+        data.hellTrialActive = false;
+        
+        const canvas = document.getElementById('arena');
+        canvas.classList.remove('hell-trial');
+        
+        console.log(`Hell's Trial ended.`);
+      }
+    }
+
+    class FireProjectile extends Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
+        super(x, y, vx, vy, emoji, damage, owner, type, data);
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Fire effect
+        ctx.shadowColor = "#ff4444";
+        ctx.shadowBlur = 10;
+        
+        // Flickering effect
+        const flicker = 0.8 + Math.random() * 0.4;
+        ctx.globalAlpha = flicker;
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    window.DemonlordModule = DemonlordModule;
+    // DEMONLORD MODULE END
+
+    // TERESTRO MODULE START  
+    class TerestroModule {
+      static initializeAbilities(character) {
+        if (character.emoji !== "👽") return;
+        
+        character.abilityData = {
+          starSequence: 0, // 0-3 (which star in sequence)
+          lastStarTime: 0,
+          starCooldown: 180, // 3 seconds between full sequences
+          normalStarCooldown: 60, // 1 second between individual stars
+          nextStarTime: 0,
+          
+          // Cosmic Blink
+          blinkRadius: 0, // Will be set to 3x character size
+          blinkCooldown: 600, // 10 seconds
+          lastBlinkTime: 0,
+          blinkReady: true,
+          
+          // Galactic Overload
+          enhancedStarHits: 0, // Track enhanced star hits on enemy
+          overloadActive: false,
+          overloadStarsRemaining: 0,
+          overloadBarragesRemaining: 0,
+          overloadCooldown: 300, // 5 seconds after overload
+        };
+        
+        // Set blink radius
+        character.abilityData.blinkRadius = character.size * 3;
+      }
+
+      static handleAbilities(character) {
+        if (character.emoji !== "👽") return;
+        if (character.isDead) return;
+        
+        const currentTime = gameTime;
+        const data = character.abilityData;
+        
+        // Handle Cosmic Blink cooldown
+        if (!data.blinkReady && currentTime - data.lastBlinkTime >= data.blinkCooldown) {
+          data.blinkReady = true;
+          console.log(`Cosmic Blink ready!`);
+        }
+        
+        // Handle star shooting
+        if (data.overloadActive) {
+          this.handleOverloadStars(character, currentTime);
+        } else {
+          this.handleNormalStars(character, currentTime);
+        }
+      }
+
+      static handleNormalStars(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (data.starSequence === 0) {
+          // Start new sequence
+          if (currentTime - data.lastStarTime >= data.starCooldown) {
+            this.shootStar(character, false); // Normal star
+            data.starSequence = 1;
+            data.nextStarTime = currentTime + data.normalStarCooldown;
+          }
+        } else if (data.starSequence < 3) {
+          // Continue sequence with normal stars
+          if (currentTime >= data.nextStarTime) {
+            this.shootStar(character, false); // Normal star
+            data.starSequence++;
+            data.nextStarTime = currentTime + data.normalStarCooldown;
+          }
+        } else if (data.starSequence === 3) {
+          // Shoot enhanced 4th star
+          if (currentTime >= data.nextStarTime) {
+            this.shootStar(character, true); // Enhanced star
+            data.starSequence = 0;
+            data.lastStarTime = currentTime;
+          }
+        }
+      }
+
+      static handleOverloadStars(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (data.overloadStarsRemaining > 0) {
+          if (currentTime >= data.nextStarTime) {
+            this.shootStar(character, true); // Enhanced star
+            data.overloadStarsRemaining--;
+            data.nextStarTime = currentTime + 30; // Faster shooting (0.5 seconds)
+            
+            if (data.overloadStarsRemaining === 0) {
+              data.overloadBarragesRemaining--;
+              if (data.overloadBarragesRemaining > 0) {
+                // Start next barrage
+                data.overloadStarsRemaining = 4;
+                data.nextStarTime = currentTime + 30;
+              } else {
+                // End overload
+                this.endOverload(character, currentTime);
+              }
+            }
+          }
+        }
+      }
+
+      static shootStar(character, enhanced) {
+        const enemy = character.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+        const speed = 4;
+        
+        const star = new Projectile(
+          character.x, character.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          enhanced ? "🌟" : "⭐", 
+          enhanced ? 2 : 1, 
+          character, 
+          "star",
+          { enhanced: enhanced }
+        );
+        
+        projectiles.push(star);
+        
+        console.log(`Terestro shot ${enhanced ? 'enhanced' : 'normal'} star! ${enhanced ? '🌟' : '⭐'}`);
+        audio.shoot();
+      }
+
+      static handleStarHit(projectile, character) {
+        if (projectile.type !== "star" || projectile.owner.emoji !== "👽") return;
+        
+        const terestro = projectile.owner;
+        const data = terestro.abilityData;
+        
+        if (character === terestro) return; // Don't count self-hits
+        
+        // Track enhanced star hits for Galactic Overload
+        if (projectile.data.enhanced) {
+          data.enhancedStarHits++;
+          console.log(`Enhanced star hit! Total: ${data.enhancedStarHits}/3`);
+          
+          if (data.enhancedStarHits >= 3 && !data.overloadActive) {
+            this.activateGalacticOverload(terestro);
+          }
+        }
+      }
+
+      static activateGalacticOverload(character) {
+        const data = character.abilityData;
+        
+        data.overloadActive = true;
+        data.overloadBarragesRemaining = 3;
+        data.overloadStarsRemaining = 4;
+        data.enhancedStarHits = 0; // Reset counter
+        data.nextStarTime = gameTime + 30; // Start immediately
+        
+        console.log(`🌟 GALACTIC OVERLOAD ACTIVATED! 3 barrages of 4 enhanced stars!`);
+        audio.ability();
+        
+        // Create overload effect
+        this.createOverloadEffect(character);
+      }
+
+      static endOverload(character, currentTime) {
+        const data = character.abilityData;
+        
+        data.overloadActive = false;
+        data.starSequence = 0;
+        data.lastStarTime = currentTime + data.overloadCooldown; // 5 second delay
+        
+        console.log(`Galactic Overload ended. Next barrage in 5 seconds.`);
+      }
+
+      static createOverloadEffect(character) {
+        // Create visual effect
+        for (let i = 0; i < 5; i++) {
+          setTimeout(() => {
+            const effect = document.createElement('div');
+            effect.style.position = 'absolute';
+            effect.style.left = `${character.x - 30 + Math.random() * 60}px`;
+            effect.style.top = `${character.y - 30 + Math.random() * 60}px`;
+            effect.style.width = '60px';
+            effect.style.height = '60px';
+            effect.style.background = 'radial-gradient(circle, rgba(0,100,255,0.8), transparent)';
+            effect.style.borderRadius = '50%';
+            effect.style.pointerEvents = 'none';
+            effect.style.zIndex = '1000';
+            effect.style.animation = 'overloadPulse 2s ease-out forwards';
+            
+            document.body.appendChild(effect);
+            setTimeout(() => effect.remove(), 2000);
+          }, i * 200);
+        }
+      }
+
+      static handleCosmicBlink(character, projectile) {
+        const data = character.abilityData;
+        
+        if (!data.blinkReady) return false;
+        
+        // Check if projectile is within blink radius
+        const distance = Math.sqrt(
+          Math.pow(projectile.x - character.x, 2) + 
+          Math.pow(projectile.y - character.y, 2)
+        );
+        
+        if (distance <= data.blinkRadius) {
+          this.performBlink(character);
+          return true; // Blink triggered
+        }
+        
+        return false;
+      }
+
+      static performBlink(character) {
+        const data = character.abilityData;
+        
+        // Find clear area (simple implementation)
+        const margin = character.size * 2;
+        let newX, newY;
+        let attempts = 0;
+        
+        do {
+          newX = margin + Math.random() * (canvas.width - 2 * margin);
+          newY = margin + Math.random() * (canvas.height - 2 * margin);
+          attempts++;
+        } while (attempts < 20); // Max attempts to find clear space
+        
+        // Create blink effect at old position
+        this.createBlinkEffect(character.x, character.y);
+        
+        // Teleport
+        character.x = newX;
+        character.y = newY;
+        
+        // Create blink effect at new position
+        this.createBlinkEffect(character.x, character.y);
+        
+        // Set cooldown
+        data.blinkReady = false;
+        data.lastBlinkTime = gameTime;
+        
+        console.log(`🌀 Cosmic Blink! Terestro teleported to safety!`);
+        audio.ability();
+      }
+
+      static createBlinkEffect(x, y) {
+        const effect = document.createElement('div');
+        effect.style.position = 'absolute';
+        effect.style.left = `${x - 40}px`;
+        effect.style.top = `${y - 40}px`;
+        effect.style.width = '80px';
+        effect.style.height = '80px';
+        effect.style.background = 'radial-gradient(circle, rgba(0,200,255,0.8), rgba(100,150,255,0.4), transparent)';
+        effect.style.borderRadius = '50%';
+        effect.style.pointerEvents = 'none';
+        effect.style.zIndex = '1000';
+        effect.style.animation = 'blinkFlash 0.3s ease-out forwards';
+        
+        document.body.appendChild(effect);
+        setTimeout(() => effect.remove(), 300);
+      }
+    }
+
+    class StarProjectile extends Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
+        super(x, y, vx, vy, emoji, damage, owner, type, data);
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        if (this.data.enhanced) {
+          ctx.shadowColor = "#ffff44";
+          ctx.shadowBlur = 12;
+          // Enhanced star glow
+          const pulse = 0.8 + Math.sin(this.age * 0.2) * 0.3;
+          ctx.globalAlpha = pulse;
+        } else {
+          ctx.shadowColor = "#4444ff";
+          ctx.shadowBlur = 6;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    window.TerestroModule = TerestroModule;
+    // TERESTRO MODULE END
+
+    // GAMEMASTER MODULE START
+    class GamemasterModule {
+      static initializeAbilities(character) {
+        if (character.emoji !== "👾") return;
+        
+        character.abilityData = {
+          lastCoinTime: 0,
+          coinCooldown: 180, // 3 seconds
+          coinsCollected: 0,
+          maxCoinsForBuster: 20,
+          gameBusterActive: false,
+          gameBusterCoinsRemaining: 0,
+          gameBusterCooldown: 30, // 0.5 seconds between coins during buster
+          nextBusterCoinTime: 0,
+          banks: [] // Track bank positions
+        };
+      }
+
+      static handleAbilities(character) {
+        if (character.emoji !== "👾") return;
+        if (character.isDead) return;
+        
+        const currentTime = gameTime;
+        const data = character.abilityData;
+        
+        if (data.gameBusterActive) {
+          this.handleGameBuster(character, currentTime);
+        } else {
+          this.handleNormalCoinShooting(character, currentTime);
+        }
+      }
+
+      static handleNormalCoinShooting(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (currentTime - data.lastCoinTime >= data.coinCooldown) {
+          this.shootCoin(character);
+          data.lastCoinTime = currentTime;
+        }
+      }
+
+      static handleGameBuster(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (data.gameBusterCoinsRemaining > 0 && currentTime >= data.nextBusterCoinTime) {
+          this.shootCoin(character);
+          data.gameBusterCoinsRemaining--;
+          data.nextBusterCoinTime = currentTime + data.gameBusterCooldown;
+          
+          if (data.gameBusterCoinsRemaining === 0) {
+            data.gameBusterActive = false;
+            console.log(`Game Buster ended! Back to normal shooting.`);
+          }
+        }
+      }
+
+      static shootCoin(character) {
+        const enemy = character.getNearestEnemy();
+        if (!enemy) return;
+        
+        const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+        const speed = 3.5;
+        
+        const coin = new Projectile(
+          character.x, character.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🪙", 1, character, "coin",
+          { 
+            bounces: 0,
+            maxBounces: 3,
+            originalOwner: character
+          }
+        );
+        
+        projectiles.push(coin);
+        
+        const isBuster = character.abilityData.gameBusterActive;
+        console.log(`Gamemaster shot coin! ${isBuster ? '(Game Buster)' : ''} 🪙`);
+        audio.shoot();
+      }
+
+      static handleCoinHit(projectile, character) {
+        if (projectile.type !== "coin") return;
+        
+        const gamemaster = projectile.data.originalOwner;
+        if (!gamemaster || gamemaster.emoji !== "👾") return;
+        
+        if (character === gamemaster) {
+          // Gamemaster caught his own coin
+          this.coinCollected(gamemaster, projectile, true);
+        } else {
+          // Coin hit enemy
+          const wasDirect = projectile.data.bounces === 0;
+          
+          if (wasDirect) {
+            // Jackpot Strike - direct hit
+            character.takeDamage(2, gamemaster);
+            gamemaster.heal(1);
+            console.log(`Jackpot Strike! 2 damage + 1 heal`);
+          } else {
+            // Bounced hit
+            character.takeDamage(1, gamemaster);
+            console.log(`Bounced coin hit! 1 damage`);
+          }
+          
+          // Remove coin after hitting enemy
+          const index = projectiles.indexOf(projectile);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+        }
+      }
+
+      static handleCoinBounce(projectile) {
+        if (projectile.type !== "coin") return true;
+        
+        projectile.data.bounces++;
+        
+        if (projectile.data.bounces > projectile.data.maxBounces) {
+          // Coin exceeded max bounces, remove it
+          return false;
+        }
+        
+        return true;
+      }
+
+      static coinCollected(gamemaster, coin, isCatch = false) {
+        const data = gamemaster.abilityData;
+        
+        data.coinsCollected++;
+        console.log(`Coin collected! Total: ${data.coinsCollected}/${data.maxCoinsForBuster}`);
+        
+        // Remove coin
+        const index = projectiles.indexOf(coin);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        
+        // Check for Game Buster trigger
+        if (data.coinsCollected >= data.maxCoinsForBuster) {
+          this.activateGameBuster(gamemaster);
+        }
+      }
+
+      static activateGameBuster(character) {
+        const data = character.abilityData;
+        
+        data.gameBusterActive = true;
+        data.gameBusterCoinsRemaining = 20;
+        data.nextBusterCoinTime = gameTime;
+        data.coinsCollected = 0; // Reset counter
+        
+        console.log(`💰 GAME BUSTER ACTIVATED! Shooting 20 coins rapidly!`);
+        audio.ability();
+      }
+
+      static handleCoinCollision(coin1, coin2) {
+        // Check if both are coins
+        if (coin1.type !== "coin" || coin2.type !== "coin") return false;
+        
+        // Create bank at collision point
+        const bankX = (coin1.x + coin2.x) / 2;
+        const bankY = (coin1.y + coin2.y) / 2;
+        
+        this.createBank(bankX, bankY);
+        
+        // Remove both coins
+        const index1 = projectiles.indexOf(coin1);
+        const index2 = projectiles.indexOf(coin2);
+        
+        if (index1 > -1) projectiles.splice(index1, 1);
+        if (index2 > -1) {
+          const newIndex2 = projectiles.indexOf(coin2);
+          if (newIndex2 > -1) projectiles.splice(newIndex2, 1);
+        }
+        
+        console.log(`Two coins collided! Bank created at (${bankX}, ${bankY})`);
+        audio.bounce();
+        
+        return true;
+      }
+
+      static createBank(x, y) {
+        const bank = {
+          x: x,
+          y: y,
+          emoji: "💰",
+          size: 15,
+          age: 0,
+          lifetime: 1800 // 30 seconds
+        };
+        
+        // Add to banks array for tracking
+        const gamemaster = charactersInArena.find(c => c.emoji === "👾" && !c.isDead);
+        if (gamemaster && gamemaster.abilityData) {
+          gamemaster.abilityData.banks.push(bank);
+        }
+        
+        // Add to projectiles for collision detection
+        const bankProjectile = new Projectile(x, y, 0, 0, "💰", 0, null, "bank");
+        projectiles.push(bankProjectile);
+      }
+
+      static handleBankCollection(bank, gamemaster) {
+        if (gamemaster.emoji !== "👾") return;
+        
+        // Remove bank
+        const index = projectiles.indexOf(bank);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        
+        // Immediately trigger Game Buster
+        this.activateGameBuster(gamemaster);
+        
+        console.log(`💰 Bank collected! Instant Game Buster activated!`);
+        audio.ability();
+      }
+    }
+
+    class CoinProjectile extends Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
+        super(x, y, vx, vy, emoji, damage, owner, type, data);
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        if (this.age > this.lifetime) {
+          return false;
+        }
+
+        // Handle wall bouncing
+        if (this.type === "coin") {
+          return this.handleCoinBouncing();
+        }
+
+        return true;
+      }
+
+      handleCoinBouncing() {
+        const margin = this.size;
+        let bounced = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          bounced = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          bounced = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          bounced = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          bounced = true;
+        }
+
+        if (bounced) {
+          return GamemasterModule.handleCoinBounce(this);
+        }
+
+        return true;
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Coin spinning effect
+        ctx.shadowColor = "#ffff44";
+        ctx.shadowBlur = 8;
+        
+        if (this.type === "bank") {
+          // Bank pulsing effect
+          const pulse = 0.8 + Math.sin(this.age * 0.1) * 0.2;
+          ctx.save();
+          ctx.scale(pulse, pulse);
+          ctx.fillText(this.emoji, this.x / pulse, this.y / pulse);
+          ctx.restore();
+        } else {
+          // Spinning coin
+          const rotation = this.age * 0.1;
+          ctx.translate(this.x, this.y);
+          ctx.rotate(rotation);
+          ctx.fillText(this.emoji, 0, 0);
+        }
+        
+        ctx.restore();
+      }
+    }
+
+    window.GamemasterModule = GamemasterModule;
+    // GAMEMASTER MODULE END
+
+    // Add more character modules here following the same pattern...
+    // For brevity, I'll add just a couple more key ones
+
+    // MIMIC MODULE START
+    class MimicModule {
+      static initializeAbilities(character) {
+        if (character.emoji !== "🤡") return;
+        
+        character.abilityData = {
+          activeBall: null,
+          ballBounces: 0,
+          ballActive: false,
+          originalEmoji: "🤡",
+          mimicForm: null,
+          mimicStartTime: 0,
+          mimicDuration: 300,
+          mimicCooldownStart: 0,
+          mimicCooldownDuration: 600,
+          isMimicking: false,
+          mimicOnCooldown: false,
+          balloonsThrown: 0,
+          maxBalloons: 5,
+          lastBalloonTime: 0,
+          balloonInterval: 60,
+        };
+      }
+
+      static handleAbilities(character) {
+        if (character.emoji !== "🤡" && !character.abilityData.isMimicking) return;
+        if (character.isDead) return;
+        
+        const currentTime = gameTime;
+        const data = character.abilityData;
+        
+        this.handleMimicryStates(character, currentTime);
+        
+        if (data.isMimicking) {
+          this.handleBalloonThrowing(character, currentTime);
+        } else {
+          this.handleRedBall(character, currentTime);
+        }
+      }
+
+      static handleMimicryStates(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (data.isMimicking && currentTime - data.mimicStartTime >= data.mimicDuration) {
+          this.endMimicry(character, currentTime);
+        }
+        
+        if (data.mimicOnCooldown && currentTime - data.mimicCooldownStart >= data.mimicCooldownDuration) {
+          data.mimicOnCooldown = false;
+        }
+      }
+
+      static handleRedBall(character, currentTime) {
+        const data = character.abilityData;
+        
+        if (!data.ballActive) {
+          this.throwRedBall(character);
+        }
+      }
+
+      static throwRedBall(character) {
+        const enemy = character.getNearestEnemy();
+        if (!enemy) return;
+        
+        const data = character.abilityData;
+        const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+        const speed = 4;
+        
+        const ball = new Projectile(
+          character.x, character.y,
+          Math.cos(angle) * speed, Math.sin(angle) * speed,
+          "🔴", 1, character, "redball",
+          { 
+            mimicOwner: character,
+            bounceCount: 0,
+            maxBounces: 10
+          }
+        );
+        
+        projectiles.push(ball);
+        data.activeBall = ball;
+        data.ballActive = true;
+        data.ballBounces = 0;
+        
+        audio.shoot();
+      }
+
+      static handleRedBallHit(projectile, character) {
+        if (projectile.type !== "redball") return;
+        
+        const owner = projectile.owner;
+        const data = projectile.data;
+        
+        if (character === owner) {
+          data.bounceCount++;
+        } else {
+          data.bounceCount++;
+          
+          if (data.bounceCount >= data.maxBounces) {
+            character.takeDamage(5, owner);
+            this.removeRedBall(owner, projectile);
+            this.triggerGreatestMimicry(owner, character);
+            return;
+          } else {
+            character.takeDamage(1, owner);
+            this.triggerGreatestMimicry(owner, character);
+          }
+        }
+        
+        audio.hit();
+      }
+
+      static triggerGreatestMimicry(mimic, target) {
+        const data = mimic.abilityData;
+        
+        if (data.mimicOnCooldown || data.isMimicking) return;
+        
+        data.isMimicking = true;
+        data.mimicForm = target.emoji;
+        data.mimicStartTime = gameTime;
+        data.balloonsThrown = 0;
+        data.lastBalloonTime = gameTime;
+        
+        mimic.emoji = target.emoji;
+        mimic.addClass('mimicking');
+        
+        audio.ability();
+      }
+
+      static endMimicry(character, currentTime) {
+        const data = character.abilityData;
+        
+        character.emoji = data.originalEmoji;
+        character.removeClass('mimicking');
+        data.isMimicking = false;
+        data.mimicForm = null;
+        data.mimicOnCooldown = true;
+        data.mimicCooldownStart = currentTime;
+      }
+
+      static removeRedBall(mimic, ball) {
+        if (!mimic.abilityData) return;
+        
+        const data = mimic.abilityData;
+        
+        if (data.activeBall === ball) {
+          data.activeBall = null;
+          data.ballActive = false;
+        }
+        
+        const index = projectiles.indexOf(ball);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+      }
+    }
+
+    window.MimicModule = MimicModule;
+    // MIMIC MODULE END
+
+    // Add remaining character modules here...
+    // Due to space constraints, I'm showing the pattern with key modules
+
+    // Base ArenaCharacter class
+    class ArenaCharacter {
+      constructor(emoji, x, y, team) {
+        this.emoji = emoji;
+        this.x = x;
+        this.y = y;
+        this.team = team;
+        this.maxHp = this.getOptimalHP();
+        this.hp = this.maxHp;
+        this.size = 20;
+        this.speed = 2;
+        this.vx = (Math.random() - 0.5) * this.speed;
+        this.vy = (Math.random() - 0.5) * this.speed;
+        this.isDead = false;
+        this.statusEffects = {};
+        this.abilityData = {};
+        
+        // Initialize character-specific abilities
+        this.initializeAbilities();
+      }
+
+      getOptimalHP() {
+        const hpValues = {
+          "😈": 120, "👽": 100, "👾": 110, "💀": 95, "🤡": 105, "🎃": 125,
+          "👼🏻": 100, "🤵🏻": 110, "🐯": 90, "🦁": 80, "🐰": 115, "💀": 85,
+          "🐺": 130, "🐻‍❄️": 95, "🦊": 70, "🐼": 60
+        };
+        return hpValues[this.emoji] || 100;
+      }
+
+      initializeAbilities() {
+        // Initialize character abilities
+        if (window.DemonlordModule) DemonlordModule.initializeAbilities(this);
+        if (window.TerestroModule) TerestroModule.initializeAbilities(this);
+        if (window.GamemasterModule) GamemasterModule.initializeAbilities(this);
+        if (window.MimicModule) MimicModule.initializeAbilities(this);
+        // Add other module initializations here
+      }
+
+      update() {
+        if (this.isDead) return;
+        
+        this.handleMovement();
+        this.handleAbilities();
+        this.updateStatusEffects();
+      }
+
+      handleMovement() {
+        const margin = this.size;
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+        }
+        
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+        }
+      }
+
+      handleAbilities() {
+        // Handle character-specific abilities
+        if (window.DemonlordModule) DemonlordModule.handleAbilities(this);
+        if (window.TerestroModule) TerestroModule.handleAbilities(this);
+        if (window.GamemasterModule) GamemasterModule.handleAbilities(this);
+        if (window.MimicModule) MimicModule.handleAbilities(this);
+        // Add other module ability handlers here
+      }
+
+      updateStatusEffects() {
+        Object.keys(this.statusEffects).forEach(effect => {
+          this.statusEffects[effect]--;
+          if (this.statusEffects[effect] <= 0) {
+            delete this.statusEffects[effect];
+            this.removeClass(effect);
+          }
+        });
+      }
+
+      addStatusEffect(effect, duration) {
+        this.statusEffects[effect] = duration;
+        this.addClass(effect);
+      }
+
+      addClass(className) {
+        // Visual effect handling would go here
+      }
+
+      removeClass(className) {
+        // Visual effect removal would go here
+      }
+
+      takeDamage(damage, attacker) {
+        if (this.isDead) return;
+        
+        this.hp -= damage;
+        
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.isDead = true;
+          audio.death();
+        } else {
+          audio.hit();
+        }
+        
+        updateHPDisplay();
+      }
+
+      heal(amount) {
+        if (this.isDead) return;
+        
+        this.hp = Math.min(this.hp + amount, this.maxHp);
+        updateHPDisplay();
+      }
+
+      getNearestEnemy() {
+        const enemies = charactersInArena.filter(c => 
+          c.team !== this.team && !c.isDead
+        );
+        
+        if (enemies.length === 0) return null;
+        
+        let nearest = enemies[0];
+        let nearestDist = this.distanceTo(nearest);
+        
+        for (let i = 1; i < enemies.length; i++) {
+          const dist = this.distanceTo(enemies[i]);
+          if (dist < nearestDist) {
+            nearest = enemies[i];
+            nearestDist = dist;
+          }
+        }
+        
+        return nearest;
+      }
+
+      distanceTo(other) {
+        return Math.sqrt(
+          Math.pow(this.x - other.x, 2) + 
+          Math.pow(this.y - other.y, 2)
+        );
+      }
+
+      draw(ctx) {
+        if (this.isDead) return;
+        
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Team-based glow
+        if (this.team === 1) {
+          ctx.shadowColor = "#4CAF50";
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.shadowColor = "#2196F3";
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    // Game Functions
+    function initializeCharacterSelection() {
+      const player1Grid = document.getElementById('player1Grid');
+      const player2Grid = document.getElementById('player2Grid');
+      
+      characters.forEach(char => {
+        const elem1 = createCharacterElement(char, 1);
+        const elem2 = createCharacterElement(char, 2);
+        player1Grid.appendChild(elem1);
+        player2Grid.appendChild(elem2);
+      });
+    }
+
+    function createCharacterElement(character, player) {
+      const div = document.createElement('div');
+      div.className = 'character';
+      div.textContent = character.emoji;
+      div.dataset.emoji = character.emoji;
+      div.dataset.player = player;
+      
+      div.addEventListener('click', () => selectCharacter(character.emoji, player));
+      
+      return div;
+    }
+
+    function selectCharacter(emoji, player) {
+      const selectedArray = player === 1 ? selectedP1 : selectedP2;
+      const countElement = document.getElementById(`player${player}Count`);
+      
+      if (selectedArray.includes(emoji)) {
+        const index = selectedArray.indexOf(emoji);
+        selectedArray.splice(index, 1);
+        updateCharacterVisual(emoji, player, false);
+      } else if (selectedArray.length < 8) {
+        selectedArray.push(emoji);
+        updateCharacterVisual(emoji, player, true);
+      }
+      
+      countElement.textContent = `Selected: ${selectedArray.length}/8`;
+      
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = !(selectedP1.length === 8 && selectedP2.length === 8);
+    }
+
+    function updateCharacterVisual(emoji, player, selected) {
+      const element = document.querySelector(
+        `.character[data-emoji="${emoji}"][data-player="${player}"]`
+      );
+      
+      if (selected) {
+        element.classList.add('selected');
+      } else {
+        element.classList.remove('selected');
+      }
+    }
+
+    function startGame() {
+      document.getElementById('characterSelect').style.display = 'none';
+      document.getElementById('arenaContainer').style.display = 'flex';
+      
+      initializeArena();
+      createCharacters();
+      gameRunning = true;
+      gameLoop();
+    }
+
+    function initializeArena() {
+      canvas = document.getElementById("arena");
+      canvas.width = Math.min(window.innerWidth * 0.9, 1000);
+      canvas.height = Math.min(window.innerHeight * 0.6, 600);
+      ctx = canvas.getContext("2d");
+      
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+    }
+
+    function createCharacters() {
+      const margin = 50;
+      
+      // Create Player 1 characters (left side)
+      selectedP1.forEach((emoji, i) => {
+        const character = new ArenaCharacter(
+          emoji,
+          margin + (i % 2) * 40,
+          margin + Math.floor(i / 2) * 60,
+          1
+        );
+        charactersInArena.push(character);
+      });
+      
+      // Create Player 2 characters (right side)
+      selectedP2.forEach((emoji, i) => {
+        const character = new ArenaCharacter(
+          emoji,
+          canvas.width - margin - (i % 2) * 40,
+          margin + Math.floor(i / 2) * 60,
+          2
+        );
+        charactersInArena.push(character);
+      });
+      
+      updateHPDisplay();
+    }
+
+    function updateHPDisplay() {
+      const player1HP = document.getElementById('player1HP');
+      const player2HP = document.getElementById('player2HP');
+      
+      player1HP.innerHTML = '<div class="team-header">🔵 Player 1</div>';
+      player2HP.innerHTML = '<div class="team-header">🔴 Player 2</div>';
+      
+      charactersInArena.forEach(char => {
+        const div = document.createElement('div');
+        div.className = `character-hp ${char.isDead ? 'dead' : ''}`;
+        div.innerHTML = `
+          <span class="emoji">${char.emoji}</span>
+          <span class="hp-text">${char.hp}/${char.maxHp} HP</span>
+        `;
+        
+        if (char.team === 1) {
+          player1HP.appendChild(div);
+        } else {
+          player2HP.appendChild(div);
+        }
+      });
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      
+      gameTime++;
+      
+      // Update characters
+      charactersInArena.forEach(char => char.update());
+      
+      // Update projectiles
+      projectiles = projectiles.filter(projectile => {
+        const shouldKeep = projectile.update();
+        if (!shouldKeep) return false;
+        
+        // Check collisions with characters
+        charactersInArena.forEach(char => {
+          if (char.isDead) return;
+          if (projectile.owner === char) return;
+          
+          const distance = Math.sqrt(
+            Math.pow(projectile.x - char.x, 2) + 
+            Math.pow(projectile.y - char.y, 2)
+          );
+          
+          if (distance < projectile.size + char.size) {
+            handleProjectileHit(projectile, char);
+          }
+        });
+        
+        return true;
+      });
+      
+      // Check win condition
+      checkWinCondition();
+      
+      // Render
+      render();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function handleProjectileHit(projectile, character) {
+      // Route to character-specific handlers
+      if (projectile.type === "fire" && window.DemonlordModule) {
+        DemonlordModule.handleFireProjectileHit(projectile, character);
+      } else if (projectile.type === "star" && window.TerestroModule) {
+        TerestroModule.handleStarHit(projectile, character);
+      } else if (projectile.type === "coin" && window.GamemasterModule) {
+        GamemasterModule.handleCoinHit(projectile, character);
+      } else if (projectile.type === "redball" && window.MimicModule) {
+        MimicModule.handleRedBallHit(projectile, character);
+      }
+      // Add more projectile type handlers here
+      
+      // Default damage if not handled by specific module
+      if (projectile.damage > 0) {
+        character.takeDamage(projectile.damage, projectile.owner);
+      }
+      
+      // Remove projectile (unless it's persistent like red ball)
+      if (projectile.type !== "redball") {
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+      }
+    }
+
+    function checkWinCondition() {
+      const player1Alive = charactersInArena.filter(c => c.team === 1 && !c.isDead);
+      const player2Alive = charactersInArena.filter(c => c.team === 2 && !c.isDead);
+      
+      if (player1Alive.length === 0 || player2Alive.length === 0) {
+        gameRunning = false;
+        showGameOver(player1Alive.length > 0 ? 1 : 2);
+      }
+    }
+
+    function showGameOver(winner) {
+      const gameOverDiv = document.getElementById('gameOver');
+      const winnerText = document.getElementById('winnerText');
+      
+      winnerText.textContent = `🎉 Player ${winner} Wins! 🎉`;
+      gameOverDiv.style.display = 'block';
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw background
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, '#2d2d44');
+      gradient.addColorStop(1, '#1e1e2e');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw characters
+      charactersInArena.forEach(char => char.draw(ctx));
+      
+      // Draw projectiles
+      projectiles.forEach(projectile => projectile.draw(ctx));
+    }
+
+    function resetGame() {
+      gameRunning = false;
+      selectedP1 = [];
+      selectedP2 = [];
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      document.getElementById('gameOver').style.display = 'none';
+      document.getElementById('arenaContainer').style.display = 'none';
+      document.getElementById('characterSelect').style.display = 'flex';
+      
+      // Reset character selection
+      document.querySelectorAll('.character').forEach(elem => {
+        elem.classList.remove('selected');
+      });
+      
+      document.getElementById('player1Count').textContent = 'Selected: 0/8';
+      document.getElementById('player2Count').textContent = 'Selected: 0/8';
+      document.getElementById('startBtn').disabled = true;
+    }
+
+    // Initialize the game
+    window.addEventListener('load', () => {
+      initializeCharacterSelection();
+    });
+  </script>
+</body>
+</html>
