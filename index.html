@@ -1302,36 +1302,7 @@
       }
     }
 
-    // Load character modules after Projectile class is defined
-    const script = document.createElement('script');
-    const moduleFiles = [
-      'demonlord.js', 'terestro.js', 'gamemaster.js', 'deathblow.js',
-      'mimic.js', 'tricker.js', 'grinch.js', 'kael.js', 'magico.js',
-      'clawhard.js', 'kingstone.js', 'moonhowl.js', 'antarticus.js',
-      'blackspot.js', 'frenzy.js', 'hopper.js'
-    ];
-    
-    // Load modules sequentially to ensure proper order
-    let moduleIndex = 0;
-    function loadNextModule() {
-      if (moduleIndex < moduleFiles.length) {
-        const script = document.createElement('script');
-        script.src = moduleFiles[moduleIndex];
-        script.onload = () => {
-          moduleIndex++;
-          loadNextModule();
-        };
-        script.onerror = () => {
-          console.error(`Failed to load: ${moduleFiles[moduleIndex]}`);
-          moduleIndex++;
-          loadNextModule();
-        };
-        document.head.appendChild(script);
-      }
-    }
-    
-    // Start loading modules
-    loadNextModule();
+
 
     // Enhanced Character class with module integration
     class ArenaCharacter {
@@ -2297,7 +2268,27 @@
       selectedP2 = [];
       updateDisplay();
     }
+  </script>
 
+  <!-- Character Modules - Load after all classes are defined -->
+  <script src="demonlord.js"></script>
+  <script src="terestro.js"></script>
+  <script src="gamemaster.js"></script>
+  <script src="deathblow.js"></script>
+  <script src="mimic.js"></script>
+  <script src="tricker.js"></script>
+  <script src="grinch.js"></script>
+  <script src="kael.js"></script>
+  <script src="magico.js"></script>
+  <script src="clawhard.js"></script>
+  <script src="kingstone.js"></script>
+  <script src="moonhowl.js"></script>
+  <script src="antarticus.js"></script>
+  <script src="blackspot.js"></script>
+  <script src="frenzy.js"></script>
+  <script src="hopper.js"></script>
+
+  <script>
     // Initialize the game
     createCharacterGrid("player1Chars", 1);
     createCharacterGrid("player2Chars", 2);
