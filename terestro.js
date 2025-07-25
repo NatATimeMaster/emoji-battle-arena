@@ -6,27 +6,23 @@ class TerestroModule {
     if (character.emoji !== "👽") return;
     
     character.abilityData = {
-      // Star shooting mechanics
-      starsFired: 0, // Count of stars in current barrage (0-3 normal, 4th enhanced)
-      lastStarTime: 0, // Last time a star was fired
-      nextBarrageTime: 0, // When next barrage can start
-      starCooldown: 0, // Current cooldown between stars
+      lastStarTime: 0,
+      starsFired: 0,
+      starsPerBarrage: 4,
+      starCooldown: 0,
+      nextBarrageCooldown: 180, // 3 seconds
       
-      // Cosmic Blink mechanics
-      lastBlinkTime: -600, // Last time blink was used (start ready)
-      blinkRadius: character.size * 3, // Detection radius for projectiles
+      // Galactic Overload system
+      galacticOverloadReady: false,
+      galacticOverloadActive: false,
+      enhancedStarsHit: 0,
+      requiredEnhancedHits: 3,
+      overloadBarrages: 0,
+      maxOverloadBarrages: 3,
       
-      // Galactic Overload mechanics
-      enhancedStarsHitEnemies: 0, // Count of enhanced stars that hit enemies
-      overloadActive: false, // Whether Galactic Overload is active
-      overloadBarragesLeft: 0, // How many enhanced barrages left in overload
-      overloadStarsFired: 0, // Stars fired in current overload barrage
-      
-      // Timing
-      normalBarrageCooldown: 180, // 3 seconds between barrages
-      extendedBarrageCooldown: 300, // 5 seconds after overload
-      normalStarInterval: 20, // ~0.33 seconds between stars
-      overloadStarInterval: 15, // Faster during overload
+      // Cosmic Blink system
+      blinkCooldown: 0,
+      blinkRadius: 48 // 3x his size (16 * 3)
     };
   }
 
@@ -34,184 +30,146 @@ class TerestroModule {
     if (character.emoji !== "👽" || character.isDead) return;
     
     const currentTime = gameTime;
-    const data = character.abilityData;
     
-    // Handle Cosmic Blink detection
-    this.handleCosmicBlink(character, currentTime);
+    // Handle Cosmic Blink detection and cooldown
+    this.updateBlinkAbility(character, currentTime);
     
     // Handle star shooting
     this.handleStarShooting(character, currentTime);
   }
 
-  static handleCosmicBlink(character, currentTime) {
-    const data = character.abilityData;
-    const BLINK_COOLDOWN = 600; // 10 seconds at 60fps
+  static updateBlinkAbility(character, currentTime) {
+    // Reduce blink cooldown
+    if (character.abilityData.blinkCooldown > 0) {
+      character.abilityData.blinkCooldown--;
+    }
     
-    // Check if blink is on cooldown
-    if (currentTime - data.lastBlinkTime < BLINK_COOLDOWN) return;
-    
-    // Check for projectiles within radius
-    const dangerousProjectile = projectiles.find(p => {
-      if (p.owner === character) return false; // Ignore own projectiles
-      
-      const dx = p.x - character.x;
-      const dy = p.y - character.y;
-      const distance = Math.hypot(dx, dy);
-      
-      return distance <= data.blinkRadius;
-    });
-    
-    if (dangerousProjectile) {
-      this.performCosmicBlink(character, currentTime);
+    // Check for projectiles in blink radius if not on cooldown
+    if (character.abilityData.blinkCooldown === 0) {
+      this.checkBlinkTrigger(character);
     }
   }
 
-  static performCosmicBlink(character, currentTime) {
-    const data = character.abilityData;
+  static checkBlinkTrigger(character) {
+    const blinkRadius = character.abilityData.blinkRadius;
     
+    // Check all projectiles for proximity
+    projectiles.forEach(projectile => {
+      // Skip own team's projectiles
+      if (projectile.owner && projectile.owner.team === character.team) return;
+      
+      const distance = Math.hypot(projectile.x - character.x, projectile.y - character.y);
+      if (distance <= blinkRadius) {
+        this.activateCosmicBlink(character);
+      }
+    });
+  }
+
+  static activateCosmicBlink(character) {
     // Find the most clear area in the arena
-    const newPosition = this.findClearestArea(character);
+    const clearAreas = this.findClearAreas();
+    if (clearAreas.length === 0) return;
     
-    // Teleport
-    character.x = newPosition.x;
-    character.y = newPosition.y;
+    const bestArea = clearAreas[0]; // Best area (highest safety score)
     
-    // Reset velocity to prevent weird movement
-    character.vx *= 0.5;
-    character.vy *= 0.5;
+    // Flash effect
+    if (character.element) {
+      character.element.classList.add('blinkFlash');
+      setTimeout(() => {
+        character.element.classList.remove('blinkFlash');
+      }, 300);
+    }
     
-    // Set cooldown
-    data.lastBlinkTime = currentTime;
+    // Teleport to clear area
+    character.x = bestArea.x;
+    character.y = bestArea.y;
+    character.abilityData.blinkCooldown = 600; // 10 second cooldown
     
-    // Visual effect
-    this.createBlinkEffect(character);
-    
-    console.log(`Cosmic Blink activated! Teleported to (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)})`);
+    console.log("👽 Terestro activates Cosmic Blink!");
     audio.ability();
   }
 
-  static findClearestArea(character) {
-    const canvas = document.getElementById('arena');
-    const margin = character.size * 2;
-    const attempts = 20; // Number of positions to try
-    let bestPosition = { x: character.x, y: character.y };
-    let maxDistance = 0;
+  static findClearAreas() {
+    const areas = [];
+    const margin = 50;
     
-    for (let i = 0; i < attempts; i++) {
-      const x = margin + Math.random() * (canvas.width - 2 * margin);
-      const y = margin + Math.random() * (canvas.height - 2 * margin);
-      
-      // Calculate minimum distance to all threats (enemies, projectiles)
-      let minThreatDistance = Infinity;
-      
-      // Check distance to enemies
-      charactersInArena.forEach(c => {
-        if (c !== character && !c.isDead && c.team !== character.team) {
-          const distance = Math.hypot(x - c.x, y - c.y);
-          minThreatDistance = Math.min(minThreatDistance, distance);
+    // Sample the arena in a grid
+    for (let x = margin; x < canvas.width - margin; x += 50) {
+      for (let y = margin; y < canvas.height - margin; y += 50) {
+        let isClear = true;
+        
+        // Check distance from characters
+        charactersInArena.forEach(char => {
+          if (!char.isDead && Math.hypot(char.x - x, char.y - y) < 60) {
+            isClear = false;
+          }
+        });
+        
+        // Check distance from projectiles
+        projectiles.forEach(proj => {
+          if (Math.hypot(proj.x - x, proj.y - y) < 40) {
+            isClear = false;
+          }
+        });
+        
+        if (isClear) {
+          areas.push({ x, y, safety: Math.random() });
         }
-      });
-      
-      // Check distance to projectiles
-      projectiles.forEach(p => {
-        if (p.owner !== character) {
-          const distance = Math.hypot(x - p.x, y - p.y);
-          minThreatDistance = Math.min(minThreatDistance, distance);
-        }
-      });
-      
-      if (minThreatDistance > maxDistance) {
-        maxDistance = minThreatDistance;
-        bestPosition = { x, y };
       }
     }
     
-    return bestPosition;
-  }
-
-  static createBlinkEffect(character) {
-    // Create visual blink effect (could be enhanced with particles)
-    const canvas = document.getElementById('arena');
-    const rect = canvas.getBoundingClientRect();
-    
-    // Simple flash effect
-    const flash = document.createElement('div');
-    flash.style.position = 'absolute';
-    flash.style.left = `${rect.left + character.x - 30}px`;
-    flash.style.top = `${rect.top + character.y - 30}px`;
-    flash.style.width = '60px';
-    flash.style.height = '60px';
-    flash.style.background = 'radial-gradient(circle, rgba(255,255,255,0.8), transparent)';
-    flash.style.borderRadius = '50%';
-    flash.style.pointerEvents = 'none';
-    flash.style.zIndex = '1000';
-    flash.style.animation = 'blinkFlash 0.5s ease-out forwards';
-    
-    document.body.appendChild(flash);
-    
-    setTimeout(() => flash.remove(), 500);
+    // Sort by safety score (highest first)
+    return areas.sort((a, b) => b.safety - a.safety);
   }
 
   static handleStarShooting(character, currentTime) {
-    const data = character.abilityData;
-    
-    // Check if we can start a new barrage
-    if (currentTime < data.nextBarrageTime) return;
-    
-    // Determine if we're in overload mode
-    const isOverload = data.overloadActive && data.overloadBarragesLeft > 0;
-    const starsInBarrage = 4;
-    const starInterval = isOverload ? data.overloadStarInterval : data.normalStarInterval;
-    
-    // Check if we need to start a new barrage
-    if (data.starsFired === 0) {
-      // Starting new barrage
-      data.lastStarTime = currentTime;
-      data.starsFired = 0;
-      
-      if (isOverload) {
-        data.overloadStarsFired = 0;
-      }
+    // Handle cooldown
+    if (character.abilityData.starCooldown > 0) {
+      character.abilityData.starCooldown--;
+      return;
     }
     
-    // Check if it's time to fire the next star
-    if (currentTime - data.lastStarTime >= starInterval) {
-      this.fireStar(character, currentTime, isOverload);
-      data.lastStarTime = currentTime;
-      data.starsFired++;
-      
-      if (isOverload) {
-        data.overloadStarsFired++;
-      }
+    // Handle Galactic Overload shooting
+    if (character.abilityData.galacticOverloadActive) {
+      this.handleOverloadShooting(character, currentTime);
+      return;
     }
     
-    // Check if barrage is complete
-    if (data.starsFired >= starsInBarrage) {
-      this.completeBarrage(character, currentTime, isOverload);
+    // Normal star shooting
+    if (character.abilityData.starsFired < character.abilityData.starsPerBarrage) {
+      this.shootStar(character, currentTime);
+      character.abilityData.starsFired++;
+      character.abilityData.starCooldown = 30; // 0.5 second between stars
+      
+      // If last star of barrage, apply next barrage cooldown
+      if (character.abilityData.starsFired >= character.abilityData.starsPerBarrage) {
+        character.abilityData.starCooldown = character.abilityData.nextBarrageCooldown;
+      }
+    } else {
+      // Reset for next barrage
+      character.abilityData.starsFired = 0;
     }
   }
 
-  static fireStar(character, currentTime, isOverload) {
+  static shootStar(character, currentTime) {
     const enemy = character.getNearestEnemy();
     if (!enemy) return;
-    
-    const data = character.abilityData;
-    
-    // Determine star type and damage
-    const isEnhanced = isOverload || data.starsFired === 3; // 4th star is enhanced in normal mode
-    const emoji = isEnhanced ? "🌟" : "⭐";
-    const damage = isEnhanced ? 2 : 1;
     
     // Calculate direction towards enemy
     const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
     const speed = 4;
+    
+    // Determine if this is the 4th (enhanced) star
+    const isEnhanced = character.abilityData.starsFired === 3; // 0,1,2,3 - so 3 is the 4th
+    const emoji = isEnhanced ? "🌟" : "⭐";
+    const damage = isEnhanced ? 2 : 1;
     
     // Create star projectile
     const star = new Projectile(
       character.x, character.y,
       Math.cos(angle) * speed, Math.sin(angle) * speed,
       emoji, damage, character, "star",
-      { 
+      {
         enhanced: isEnhanced,
         terestroOwner: character
       }
@@ -219,192 +177,121 @@ class TerestroModule {
     
     projectiles.push(star);
     audio.shoot();
-    
-    console.log(`${character.emoji} fired ${emoji} (${damage} damage) - Barrage: ${data.starsFired + 1}/4`);
+    console.log(`👽 Terestro shoots ${emoji}!`);
   }
 
-  static completeBarrage(character, currentTime, isOverload) {
-    const data = character.abilityData;
-    
-    if (isOverload) {
-      data.overloadBarragesLeft--;
-      data.overloadStarsFired = 0;
-      
-      if (data.overloadBarragesLeft <= 0) {
-        // End overload mode
-        data.overloadActive = false;
-        data.nextBarrageTime = currentTime + data.extendedBarrageCooldown; // 5 second cooldown
-        console.log(`Galactic Overload complete! Next barrage in 5 seconds.`);
-      } else {
-        // Continue overload with faster cooldown
-        data.nextBarrageTime = currentTime + data.normalStarInterval * 2; // Quick transition between overload barrages
-        console.log(`Overload barrage complete! ${data.overloadBarragesLeft} enhanced barrages remaining.`);
-      }
+  static handleOverloadShooting(character, currentTime) {
+    if (character.abilityData.starsFired < character.abilityData.starsPerBarrage) {
+      this.shootEnhancedStar(character);
+      character.abilityData.starsFired++;
+      character.abilityData.starCooldown = 15; // Faster shooting during overload
     } else {
-      // Normal barrage complete
-      data.nextBarrageTime = currentTime + data.normalBarrageCooldown; // 3 second cooldown
+      // Barrage complete
+      character.abilityData.starsFired = 0;
+      character.abilityData.overloadBarrages++;
+      character.abilityData.starCooldown = 60; // 1 second between overload barrages
+      
+      if (character.abilityData.overloadBarrages >= character.abilityData.maxOverloadBarrages) {
+        this.endGalacticOverload(character);
+      }
     }
+  }
+
+  static shootEnhancedStar(character) {
+    const enemy = character.getNearestEnemy();
+    if (!enemy) return;
     
-    data.starsFired = 0;
+    // Calculate direction towards enemy
+    const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+    const speed = 4;
+    
+    // All overload stars are enhanced
+    const star = new Projectile(
+      character.x, character.y,
+      Math.cos(angle) * speed, Math.sin(angle) * speed,
+      "🌟", 2, character, "star",
+      {
+        enhanced: true,
+        terestroOwner: character
+      }
+    );
+    
+    projectiles.push(star);
+    console.log("👽 Terestro fires Galactic Overload star 🌟!");
   }
 
   static handleStarHit(projectile, character) {
-    if (projectile.type !== "star" || character === projectile.owner) return;
-    
-    const owner = projectile.owner;
-    const isEnhanced = projectile.data.enhanced;
+    if (character.team === projectile.owner.team) return;
     
     // Apply damage
-    character.takeDamage(projectile.damage, owner);
+    character.takeDamage(projectile.damage, projectile.owner);
+    console.log(`⭐ Star hit ${character.emoji} for ${projectile.damage} damage!`);
     
     // Track enhanced star hits for Galactic Overload
-    if (isEnhanced && owner.abilityData) {
-      owner.abilityData.enhancedStarsHitEnemies++;
-      console.log(`Enhanced star hit! Count: ${owner.abilityData.enhancedStarsHitEnemies}/3`);
-      
-      // Check for Galactic Overload trigger
-      if (owner.abilityData.enhancedStarsHitEnemies >= 3) {
-        this.triggerGalacticOverload(owner);
-      }
+    if (projectile.data.enhanced) {
+      this.trackEnhancedStarHit(projectile.owner);
+    }
+  }
+
+  static trackEnhancedStarHit(terestro) {
+    terestro.abilityData.enhancedStarsHit++;
+    console.log(`👽 Enhanced stars hit: ${terestro.abilityData.enhancedStarsHit}/${terestro.abilityData.requiredEnhancedHits}`);
+    
+    if (terestro.abilityData.enhancedStarsHit >= terestro.abilityData.requiredEnhancedHits) {
+      this.activateGalacticOverload(terestro);
+    }
+  }
+
+  static activateGalacticOverload(character) {
+    character.abilityData.galacticOverloadActive = true;
+    character.abilityData.enhancedStarsHit = 0; // Reset counter
+    character.abilityData.overloadBarrages = 0;
+    character.abilityData.starsFired = 0;
+    character.abilityData.starCooldown = 0; // Start immediately
+    
+    // Visual effect
+    if (character.element) {
+      character.element.classList.add('overloadPulse');
     }
     
-    console.log(`Star hit: ${projectile.damage} damage (${isEnhanced ? 'Enhanced' : 'Normal'})`);
-  }
-
-  static triggerGalacticOverload(terestro) {
-    const data = terestro.abilityData;
-    
-    data.overloadActive = true;
-    data.overloadBarragesLeft = 3; // 3 enhanced barrages
-    data.enhancedStarsHitEnemies = 0; // Reset counter
-    data.starsFired = 0; // Reset current barrage
-    data.nextBarrageTime = gameTime; // Start immediately
-    
-    console.log(`🌟 GALACTIC OVERLOAD ACTIVATED! 🌟 - 12 enhanced stars incoming!`);
+    console.log("👽 GALACTIC OVERLOAD ACTIVATED!");
     audio.ability();
-    
-    // Visual effect for overload activation
-    this.createOverloadEffect(terestro);
   }
 
-  static createOverloadEffect(character) {
-    const canvas = document.getElementById('arena');
-    const rect = canvas.getBoundingClientRect();
+  static endGalacticOverload(character) {
+    character.abilityData.galacticOverloadActive = false;
+    character.abilityData.nextBarrageCooldown = 300; // 5 second penalty
+    character.abilityData.starCooldown = 300;
     
-    // Create pulsing effect around Terestro
-    const overload = document.createElement('div');
-    overload.style.position = 'absolute';
-    overload.style.left = `${rect.left + character.x - 40}px`;
-    overload.style.top = `${rect.top + character.y - 40}px`;
-    overload.style.width = '80px';
-    overload.style.height = '80px';
-    overload.style.background = 'radial-gradient(circle, rgba(255,215,0,0.6), rgba(255,255,255,0.3), transparent)';
-    overload.style.borderRadius = '50%';
-    overload.style.pointerEvents = 'none';
-    overload.style.zIndex = '1000';
-    overload.style.animation = 'overloadPulse 2s ease-out forwards';
+    // Remove visual effect
+    if (character.element) {
+      character.element.classList.remove('overloadPulse');
+    }
     
-    document.body.appendChild(overload);
+    console.log("👽 Galactic Overload ended. Next barrage in 5 seconds.");
     
-    setTimeout(() => overload.remove(), 2000);
+    // Reset to normal cooldown after penalty
+    setTimeout(() => {
+      character.abilityData.nextBarrageCooldown = 180; // Back to normal 3 seconds
+    }, 5000);
   }
 
   static handleCharacterDeath(character) {
-    // Clean up any Terestro-specific effects when character dies
-    if (character.emoji === "👽") {
-      // Reset any ongoing overload effects
-      if (character.abilityData) {
-        character.abilityData.overloadActive = false;
-        character.abilityData.overloadBarragesLeft = 0;
-      }
-    }
+    if (character.emoji !== "👽") return;
+    
+    // Stop Galactic Overload if active
+    character.abilityData.galacticOverloadActive = false;
   }
 }
 
-// Star Projectile class extension
 class StarProjectile extends Projectile {
-  constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
-    super(x, y, vx, vy, emoji, damage, owner, type, data);
-  }
-
   update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.age++;
-
-    if (this.age > this.lifetime) {
-      return false;
-    }
-
-    // Check wall collision - stars stop when hitting walls
-    const margin = this.size;
-    if (this.x <= margin || this.x >= canvas.width - margin ||
-        this.y <= margin || this.y >= canvas.height - margin) {
-      return false; // Star disappears when hitting wall
-    }
-
-    return true;
+    return super.update();
   }
 
   draw(ctx) {
-    ctx.save();
-    ctx.font = `${this.size * 2}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Add glow effect for enhanced stars
-    if (this.data.enhanced) {
-      ctx.shadowColor = "#ffd700";
-      ctx.shadowBlur = 15;
-    } else {
-      ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 8;
-    }
-    
-    ctx.fillText(this.emoji, this.x, this.y);
-    ctx.restore();
+    super.draw(ctx);
   }
 }
 
-// Add CSS animations for effects
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes blinkFlash {
-      0% { 
-        transform: scale(0) rotate(0deg);
-        opacity: 1;
-      }
-      50% {
-        transform: scale(1) rotate(180deg);
-        opacity: 0.8;
-      }
-      100% { 
-        transform: scale(0) rotate(360deg);
-        opacity: 0;
-      }
-    }
-    
-    @keyframes overloadPulse {
-      0% { 
-        transform: scale(0);
-        opacity: 1;
-      }
-      50% {
-        transform: scale(1.2);
-        opacity: 0.8;
-      }
-      100% { 
-        transform: scale(2);
-        opacity: 0;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// Export for global access
-if (typeof window !== 'undefined') {
-  window.TerestroModule = TerestroModule;
-  window.StarProjectile = StarProjectile;
-}
+window.TerestroModule = TerestroModule;

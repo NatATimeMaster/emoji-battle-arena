@@ -49,167 +49,83 @@ class DemonlordModule {
     
     projectiles.push(fire);
     audio.shoot();
-  }
-
-  static handleFireWallHit(projectile, side) {
-    const owner = projectile.owner;
-    if (!owner || owner.emoji !== "😈") return;
-    
-    // Track wall hits
-    owner.abilityData.wallsHit.add(side);
-    
-    // Check if all 4 walls have been hit
-    if (owner.abilityData.wallsHit.size === 4) {
-      this.triggerHellsTrial(owner);
-      owner.abilityData.wallsHit.clear(); // Reset for next trigger
-    }
-  }
-
-  static triggerHellsTrial(demonlord) {
-    demonlord.abilityData.hellsTrialTriggers++;
-    demonlord.abilityData.hellsTrialActive = true;
-    
-    // Update fire damage multiplier
-    demonlord.abilityData.fireMultiplier = demonlord.abilityData.hellsTrialTriggers;
-    
-    // Activate Hell's Trial for all enemies
-    charactersInArena.forEach(character => {
-      if (character.team !== demonlord.team && !character.isDead) {
-        character.abilityData.hellsTrialActive = true;
-        character.abilityData.hellsTrialDemonlord = demonlord;
-      }
-    });
-    
-    // Visual effect: Turn arena red
-    const canvas = document.getElementById('arena');
-    canvas.classList.add('hell-trial');
-    
-    console.log(`Hell's Trial activated! Trigger count: ${demonlord.abilityData.hellsTrialTriggers}`);
-    audio.ability();
+    console.log("🔥 Demonlord fires!");
   }
 
   static handleFireHit(projectile, character) {
-    if (projectile.type !== "fire" || character === projectile.owner) return;
+    if (character.team === projectile.owner.team) return;
     
-    const owner = projectile.owner;
-    const baseDamage = 1;
-    const multiplier = owner.abilityData.fireMultiplier || 1;
-    const directDamage = baseDamage * multiplier;
+    console.log(`🔥 Fire hit ${character.emoji}!`);
+    character.takeDamage(projectile.damage, projectile.owner);
+    audio.hit();
+  }
+
+  static handleFireWallHit(projectile, side) {
+    if (!projectile.data.wallsHitTracker) return;
     
-    // Apply direct fire damage
-    character.takeDamage(directDamage, owner);
+    projectile.data.wallsHitTracker.add(side);
+    console.log(`🔥 Fire hit ${side} wall! Total unique walls hit: ${projectile.data.wallsHitTracker.size}`);
     
-    // Apply burn damage after a delay
+    // Check if all 4 walls have been hit
+    if (projectile.data.wallsHitTracker.size >= 4 && projectile.owner) {
+      this.activateHellsTrial(projectile.owner);
+    }
+  }
+
+  static activateHellsTrial(character) {
+    if (character.abilityData.hellsTrialActive) return;
+    
+    character.abilityData.hellsTrialActive = true;
+    character.abilityData.hellsTrialTriggers++;
+    character.abilityData.fireMultiplier = 2; // Double fire damage during Hell's Trial
+    
+    // Apply visual effect to arena
+    const canvas = document.getElementById('arena');
+    canvas.classList.add('hell-trial');
+    
+    console.log("🔥 HELL'S TRIAL ACTIVATED! Arena becomes hellish!");
+    audio.ability();
+    
+    // Hell's Trial lasts for 10 seconds
     setTimeout(() => {
-      if (!character.isDead) {
-        character.takeDamage(projectile.data.burnDamage || 1, owner);
-        console.log(`Burn damage applied: ${projectile.data.burnDamage || 1}`);
-      }
-    }, 1000); // 1 second delay for burn
-    
-    console.log(`Fire hit: ${directDamage} direct + ${projectile.data.burnDamage || 1} burn = ${directDamage + (projectile.data.burnDamage || 1)} total`);
+      character.abilityData.hellsTrialActive = false;
+      character.abilityData.fireMultiplier = 1; // Reset fire damage
+      canvas.classList.remove('hell-trial');
+      console.log("🔥 Hell's Trial ended");
+    }, 6000); // 10 seconds
   }
 
   static applyHellsTrialDamage() {
-    // Apply Hell's Trial damage every second (60 frames)
-    if (gameTime % 60 !== 0) return;
+    const canvas = document.getElementById('arena');
+    if (!canvas.classList.contains('hell-trial')) return;
     
+    // Apply damage to all non-Demonlord characters every 2 seconds
     charactersInArena.forEach(character => {
-      if (character.abilityData.hellsTrialActive && !character.isDead) {
-        const demonlord = character.abilityData.hellsTrialDemonlord;
-        if (demonlord && !demonlord.isDead) {
-          const damagePerSecond = Math.min(2, demonlord.abilityData.hellsTrialTriggers);
-          character.takeDamage(damagePerSecond);
-          console.log(`Hell's Trial damage: ${damagePerSecond} to ${character.emoji}`);
-        }
+      if (character.emoji !== "😈" && !character.isDead && gameTime % 120 === 0) { // Every 2 seconds
+        character.takeDamage(1);
+        console.log(`🔥 Hell's Trial burns ${character.emoji} for 1 damage!`);
       }
     });
   }
 
   static handleCharacterDeath(character) {
-    // Clean up Hell's Trial effects when Demonlord dies
-    if (character.emoji === "😈" && character.abilityData.hellsTrialActive) {
-      charactersInArena.forEach(c => {
-        if (c.abilityData.hellsTrialDemonlord === character) {
-          c.abilityData.hellsTrialActive = false;
-          c.abilityData.hellsTrialDemonlord = null;
-        }
-      });
-      
-      // Remove red arena effect if no other Demonlords are active
-      const activeDemonlords = charactersInArena.filter(c => 
-        c.emoji === "😈" && !c.isDead && c.abilityData.hellsTrialActive
-      );
-      
-      if (activeDemonlords.length === 0) {
-        const canvas = document.getElementById('arena');
-        canvas.classList.remove('hell-trial');
-      }
-    }
+    if (character.emoji !== "😈") return;
+    
+    // End Hell's Trial if Demonlord dies
+    character.abilityData.hellsTrialActive = false;
+    const canvas = document.getElementById('arena');
+    canvas.classList.remove('hell-trial');
   }
 }
 
-// Fire Projectile class extension
 class FireProjectile extends Projectile {
-  constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
-    super(x, y, vx, vy, emoji, damage, owner, type, data);
-    this.hasHitWall = false;
-  }
-
   update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.age++;
-
-    if (this.age > this.lifetime) {
-      return false;
-    }
-
-    // Check wall collision
-    const margin = this.size;
-    let hitWall = false;
-    let hitSide = null;
-
-    if (this.x <= margin) {
-      hitSide = 'left';
-      hitWall = true;
-    } else if (this.x >= canvas.width - margin) {
-      hitSide = 'right';
-      hitWall = true;
-    } else if (this.y <= margin) {
-      hitSide = 'top';
-      hitWall = true;
-    } else if (this.y >= canvas.height - margin) {
-      hitSide = 'bottom';
-      hitWall = true;
-    }
-
-    if (hitWall && !this.hasHitWall) {
-      this.hasHitWall = true;
-      DemonlordModule.handleFireWallHit(this, hitSide);
-      return false; // Fire stops when hitting wall
-    }
-
-    return true;
+    return super.update();
   }
 
   draw(ctx) {
-    ctx.save();
-    ctx.font = `${this.size * 2}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Fire glow effect
-    ctx.shadowColor = "#ff4444";
-    ctx.shadowBlur = 10;
-    
-    ctx.fillText(this.emoji, this.x, this.y);
-    ctx.restore();
+    super.draw(ctx);
   }
 }
 
-// Export for global access
-if (typeof window !== 'undefined') {
-  window.DemonlordModule = DemonlordModule;
-  window.FireProjectile = FireProjectile;
-}
+window.DemonlordModule = DemonlordModule;

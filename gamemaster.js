@@ -1,24 +1,18 @@
 // Gamemaster Character Module
-// 👾 Gamemaster - Coin projectiles with bouncing, collection, and Game Buster
+// 👾 Gamemaster - Coin projectiles with Jackpot Strike and Game Buster
 
 class GamemasterModule {
   static initializeAbilities(character) {
     if (character.emoji !== "👾") return;
     
     character.abilityData = {
-      // Coin shooting mechanics
-      lastCoinTime: 0, // Last time a coin was fired
-      coinCooldown: 180, // 3 seconds at 60fps
-      
-      // Game Buster mechanics
-      coinsCollected: 0, // Number of coins collected by hitting/catching them
-      gameBusterActive: false, // Whether Game Buster is currently active
-      gameBusterCoinsLeft: 0, // Coins left to fire in Game Buster mode
-      gameBusterCooldown: 30, // 0.5 seconds at 60fps for rapid fire
-      lastGameBusterCoin: 0, // Last time a Game Buster coin was fired
-      
-      // Bank mechanics
-      banksCreated: 0, // Number of banks created from coin collisions
+      lastCoinTime: 0,
+      coinCooldown: 180, // 3 seconds
+      coinsCollected: 0,
+      gameBusterActive: false,
+      gameBusterShots: 0,
+      maxGameBusterShots: 20,
+      gameBusterCooldown: 30 // 0.5 seconds between Game Buster shots
     };
   }
 
@@ -26,49 +20,21 @@ class GamemasterModule {
     if (character.emoji !== "👾" || character.isDead) return;
     
     const currentTime = gameTime;
-    const data = character.abilityData;
     
-    // Handle Game Buster mode
-    if (data.gameBusterActive) {
+    // Handle Game Buster rapid fire
+    if (character.abilityData.gameBusterActive) {
       this.handleGameBuster(character, currentTime);
-    } else {
-      // Handle normal coin shooting
-      this.handleNormalCoinShooting(character, currentTime);
-    }
-    
-    // Check for coin collisions to create banks
-    this.checkCoinCollisions(character);
-  }
-
-  static handleNormalCoinShooting(character, currentTime) {
-    const data = character.abilityData;
-    
-    // Check if it's time to fire a coin
-    if (currentTime - data.lastCoinTime >= data.coinCooldown) {
-      this.fireCoin(character, false);
-      data.lastCoinTime = currentTime;
-    }
-  }
-
-  static handleGameBuster(character, currentTime) {
-    const data = character.abilityData;
-    
-    // Check if we still have coins to fire in Game Buster mode
-    if (data.gameBusterCoinsLeft <= 0) {
-      data.gameBusterActive = false;
-      console.log(`Game Buster complete! Returning to normal firing.`);
       return;
     }
     
-    // Fire coins rapidly
-    if (currentTime - data.lastGameBusterCoin >= data.gameBusterCooldown) {
-      this.fireCoin(character, true);
-      data.lastGameBusterCoin = currentTime;
-      data.gameBusterCoinsLeft--;
+    // Regular coin shooting
+    if (currentTime - character.abilityData.lastCoinTime >= character.abilityData.coinCooldown) {
+      this.fireCoin(character);
+      character.abilityData.lastCoinTime = currentTime;
     }
   }
 
-  static fireCoin(character, isGameBuster = false) {
+  static fireCoin(character) {
     const enemy = character.getNearestEnemy();
     if (!enemy) return;
     
@@ -81,120 +47,147 @@ class GamemasterModule {
       character.x, character.y,
       Math.cos(angle) * speed, Math.sin(angle) * speed,
       "🪙", 1, character, "coin",
-      { 
+      {
         bounces: 0,
         maxBounces: 3,
         gamemasterOwner: character,
-        isGameBuster: isGameBuster,
-        hasHitDirectly: false
+        hasHitEnemy: false
       }
     );
     
     projectiles.push(coin);
     audio.shoot();
-    
-    console.log(`${character.emoji} fired 🪙 ${isGameBuster ? '(Game Buster)' : '(Normal)'}`);
+    console.log("👾 Gamemaster fires coin!");
   }
 
-  static handleCoinWallBounce(projectile) {
-    const owner = projectile.owner;
-    if (!owner || owner.emoji !== "👾") return false;
-    
-    const data = projectile.data;
-    
-    // Check if coin can still bounce
-    if (data.bounces >= data.maxBounces) {
-      return false; // Coin should be destroyed
+  static handleGameBuster(character, currentTime) {
+    if (character.abilityData.gameBusterShots >= character.abilityData.maxGameBusterShots) {
+      this.endGameBuster(character);
+      return;
     }
     
-    data.bounces++;
-    console.log(`Coin bounced! (${data.bounces}/${data.maxBounces})`);
-    audio.bounce();
+    // Check cooldown between shots
+    if (currentTime - character.abilityData.lastCoinTime >= character.abilityData.gameBusterCooldown) {
+      this.fireGameBusterCoin(character);
+      character.abilityData.gameBusterShots++;
+      character.abilityData.lastCoinTime = currentTime;
+    }
+  }
+
+  static fireGameBusterCoin(character) {
+    const enemy = character.getNearestEnemy();
+    if (!enemy) return;
     
-    return true; // Coin continues after bounce
+    // Calculate direction towards enemy
+    const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
+    const speed = 4; // Slightly faster for Game Buster
+    
+    // Create Game Buster coin
+    const coin = new Projectile(
+      character.x, character.y,
+      Math.cos(angle) * speed, Math.sin(angle) * speed,
+      "🪙", 1, character, "coin",
+      {
+        bounces: 0,
+        maxBounces: 3,
+        gamemasterOwner: character,
+        hasHitEnemy: false,
+        gameBuster: true
+      }
+    );
+    
+    projectiles.push(coin);
+    console.log("👾 Game Buster coin fired!");
   }
 
   static handleCoinHit(projectile, character) {
-    if (projectile.type !== "coin") return;
-    
-    const owner = projectile.owner;
-    const isDirectHit = projectile.data.bounces === 0;
-    
-    if (character === owner) {
-      // Gamemaster hit by own coin - collect it
-      this.collectCoin(owner, projectile);
+    if (character.team === projectile.owner.team) {
+      // Gamemaster caught his own coin
+      this.collectCoin(projectile.owner);
+      const index = projectiles.indexOf(projectile);
+      if (index > -1) {
+        projectiles.splice(index, 1);
+      }
       return;
     }
     
     // Enemy hit by coin
-    if (isDirectHit) {
-      // Jackpot Strike: Direct hit
-      character.takeDamage(2, owner);
-      owner.heal(1);
-      console.log(`Jackpot Strike! 2 damage + 1 heal for Gamemaster`);
+    const directHit = !projectile.data.hasHitEnemy;
+    projectile.data.hasHitEnemy = true;
+    
+    if (directHit) {
+      // Jackpot Strike - direct hit
+      character.takeDamage(2, projectile.owner);
+      projectile.owner.heal(1);
+      console.log("💰 Jackpot Strike! 2 damage + 1 heal");
     } else {
-      // Bounced hit
-      character.takeDamage(1, owner);
-      console.log(`Bounced coin hit: 1 damage`);
+      // Bounced coin hit
+      character.takeDamage(1, projectile.owner);
+      console.log("🪙 Coin hit after bounce: 1 damage");
+    }
+    
+    // Remove coin after hitting enemy
+    const index = projectiles.indexOf(projectile);
+    if (index > -1) {
+      projectiles.splice(index, 1);
     }
   }
 
-  static collectCoin(gamemaster, coinProjectile) {
-    const data = gamemaster.abilityData;
-    data.coinsCollected++;
+  static handleCoinWallBounce(coin) {
+    coin.data.bounces++;
+    audio.bounce();
     
-    console.log(`Coin collected! Total: ${data.coinsCollected}/20`);
+    if (coin.data.bounces >= coin.data.maxBounces) {
+      console.log("🪙 Coin disappeared after max bounces");
+      return false; // Remove coin
+    }
     
-    // Check if Game Buster should be triggered
-    if (data.coinsCollected >= 20) {
-      this.triggerGameBuster(gamemaster);
+    return true; // Continue bouncing
+  }
+
+  static collectCoin(gamemaster) {
+    gamemaster.abilityData.coinsCollected++;
+    console.log(`👾 Coins collected: ${gamemaster.abilityData.coinsCollected}/20`);
+    
+    if (gamemaster.abilityData.coinsCollected >= 20) {
+      this.activateGameBuster(gamemaster);
     }
   }
 
-  static triggerGameBuster(gamemaster) {
-    const data = gamemaster.abilityData;
+  static activateGameBuster(character) {
+    character.abilityData.gameBusterActive = true;
+    character.abilityData.gameBusterShots = 0;
+    character.abilityData.coinsCollected = 0; // Reset counter
     
-    data.gameBusterActive = true;
-    data.gameBusterCoinsLeft = 20;
-    data.coinsCollected = 0; // Reset counter
-    data.lastGameBusterCoin = gameTime;
-    
-    console.log(`🎰 GAME BUSTER ACTIVATED! 🎰 - 20 rapid coins incoming!`);
+    console.log("👾 GAME BUSTER ACTIVATED! 20 rapid coins incoming!");
     audio.ability();
-    
-    // Visual effect for Game Buster activation
-    this.createGameBusterEffect(gamemaster);
   }
 
-  static createGameBusterEffect(character) {
-    const canvas = document.getElementById('arena');
-    const rect = canvas.getBoundingClientRect();
+  static endGameBuster(character) {
+    character.abilityData.gameBusterActive = false;
+    character.abilityData.gameBusterShots = 0;
     
-    // Create pulsing coin effect around Gamemaster
-    const effect = document.createElement('div');
-    effect.style.position = 'absolute';
-    effect.style.left = `${rect.left + character.x - 40}px`;
-    effect.style.top = `${rect.top + character.y - 40}px`;
-    effect.style.width = '80px';
-    effect.style.height = '80px';
-    effect.style.background = 'radial-gradient(circle, rgba(255,215,0,0.8), rgba(255,165,0,0.4), transparent)';
-    effect.style.borderRadius = '50%';
-    effect.style.pointerEvents = 'none';
-    effect.style.zIndex = '1000';
-    effect.style.animation = 'gameBusterPulse 2s ease-out forwards';
-    
-    // Add coin symbols
-    effect.innerHTML = '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px;">🪙💰🪙</div>';
-    
-    document.body.appendChild(effect);
-    
-    setTimeout(() => effect.remove(), 2000);
+    console.log("👾 Game Buster complete!");
   }
 
-  static checkCoinCollisions(gamemaster) {
-    const coins = projectiles.filter(p => p.type === "coin" && p.owner === gamemaster);
+  static handleBankHit(projectile, character) {
+    if (character.team !== projectile.owner.team) return; // Only Gamemaster can collect banks
     
-    // Check for coin-to-coin collisions
+    // Gamemaster collected bank - trigger immediate Game Buster
+    console.log("💰 Bank collected! Triggering immediate Game Buster!");
+    this.activateGameBuster(character);
+    
+    // Remove bank
+    const index = projectiles.indexOf(projectile);
+    if (index > -1) {
+      projectiles.splice(index, 1);
+    }
+  }
+
+  static checkCoinCollisions() {
+    // Check for coin-coin collisions to create banks
+    const coins = projectiles.filter(p => p.type === "coin");
+    
     for (let i = 0; i < coins.length; i++) {
       for (let j = i + 1; j < coins.length; j++) {
         const coin1 = coins[i];
@@ -205,179 +198,64 @@ class GamemasterModule {
         const distance = Math.hypot(dx, dy);
         
         if (distance < (coin1.size + coin2.size)) {
-          // Coins collided - create a bank
-          this.createBank(coin1, coin2, gamemaster);
-          
-          // Remove both coins
-          const index1 = projectiles.indexOf(coin1);
-          const index2 = projectiles.indexOf(coin2);
-          if (index1 > -1) projectiles.splice(index1, 1);
-          if (index2 > -1) projectiles.splice(Math.max(0, index2 - (index1 < index2 ? 1 : 0)), 1);
-          
-          break; // Only handle one collision per frame
+          this.createBank(coin1, coin2);
+          break;
         }
       }
     }
   }
 
-  static createBank(coin1, coin2, gamemaster) {
-    // Create bank at the midpoint between the two coins
+  static createBank(coin1, coin2) {
+    // Create bank at midpoint
     const bankX = (coin1.x + coin2.x) / 2;
     const bankY = (coin1.y + coin2.y) / 2;
     
     const bank = new Projectile(
       bankX, bankY,
       0, 0, // Banks don't move
-      "💰", 0, gamemaster, "bank",
-      { 
-        gamemasterOwner: gamemaster,
-        lifetime: 1800 // 30 seconds lifetime
+      "💰", 0, coin1.owner, "bank",
+      {
+        lifetime: 600, // 10 seconds
+        spawnTime: gameTime
       }
     );
     
     projectiles.push(bank);
-    gamemaster.abilityData.banksCreated++;
     
-    console.log(`Bank created from coin collision! 💰`);
-    audio.ability();
-  }
-
-  static handleBankHit(projectile, character) {
-    if (projectile.type !== "bank") return;
+    // Remove the two coins that collided
+    const index1 = projectiles.indexOf(coin1);
+    const index2 = projectiles.indexOf(coin2);
     
-    const owner = projectile.data.gamemasterOwner;
-    
-    if (character === owner) {
-      // Gamemaster collected the bank - trigger immediate Game Buster
-      console.log(`Bank collected! Triggering immediate Game Buster! 💰`);
-      this.triggerGameBuster(owner);
-      
-      // Remove the bank
-      const index = projectiles.indexOf(projectile);
-      if (index > -1) {
-        projectiles.splice(index, 1);
-      }
+    if (index1 > -1) projectiles.splice(index1, 1);
+    if (index2 > -1) {
+      const adjustedIndex = index2 > index1 ? index2 - 1 : index2;
+      projectiles.splice(adjustedIndex, 1);
     }
+    
+    console.log("💰 Bank created from coin collision!");
   }
 
   static handleCharacterDeath(character) {
-    // Clean up any Gamemaster-specific effects when character dies
-    if (character.emoji === "👾") {
-      if (character.abilityData) {
-        character.abilityData.gameBusterActive = false;
-        character.abilityData.gameBusterCoinsLeft = 0;
-      }
-    }
+    if (character.emoji !== "👾") return;
+    
+    // Stop Game Buster if active
+    character.abilityData.gameBusterActive = false;
   }
 }
 
-// Coin Projectile class extension
 class CoinProjectile extends Projectile {
-  constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
-    super(x, y, vx, vy, emoji, damage, owner, type, data);
-  }
-
   update() {
-    // Banks don't move
-    if (this.type === "bank") {
-      this.age++;
-      return this.age <= this.lifetime;
+    // Check for coin-coin collisions
+    if (this.type === "coin") {
+      GamemasterModule.checkCoinCollisions();
     }
     
-    this.x += this.vx;
-    this.y += this.vy;
-    this.age++;
-
-    if (this.age > this.lifetime) {
-      return false;
-    }
-
-    // Check wall collision for coins
-    if (this.type === "coin") {
-      return this.handleCoinWallCollision();
-    }
-
-    return true;
-  }
-
-  handleCoinWallCollision() {
-    const margin = this.size;
-    let hitWall = false;
-
-    if (this.x <= margin) {
-      this.x = margin;
-      this.vx *= -1;
-      hitWall = true;
-    } else if (this.x >= canvas.width - margin) {
-      this.x = canvas.width - margin;
-      this.vx *= -1;
-      hitWall = true;
-    }
-
-    if (this.y <= margin) {
-      this.y = margin;
-      this.vy *= -1;
-      hitWall = true;
-    } else if (this.y >= canvas.height - margin) {
-      this.y = canvas.height - margin;
-      this.vy *= -1;
-      hitWall = true;
-    }
-
-    if (hitWall) {
-      return GamemasterModule.handleCoinWallBounce(this);
-    }
-
-    return true;
+    return super.update();
   }
 
   draw(ctx) {
-    ctx.save();
-    ctx.font = `${this.size * 2}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Add glow effects
-    if (this.type === 'coin') {
-      ctx.shadowColor = "#ffd700";
-      ctx.shadowBlur = 8;
-    } else if (this.type === 'bank') {
-      ctx.shadowColor = "#ffff00";
-      ctx.shadowBlur = 12;
-      // Add pulsing effect for banks
-      const pulse = Math.sin(this.age * 0.1) * 0.2 + 1;
-      ctx.globalAlpha = pulse;
-    }
-    
-    ctx.fillText(this.emoji, this.x, this.y);
-    ctx.restore();
+    super.draw(ctx);
   }
 }
 
-// Add CSS animations for effects
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes gameBusterPulse {
-      0% { 
-        transform: scale(0);
-        opacity: 1;
-      }
-      50% {
-        transform: scale(1.3);
-        opacity: 0.8;
-      }
-      100% { 
-        transform: scale(2.5);
-        opacity: 0;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// Export for global access
-if (typeof window !== 'undefined') {
-  window.GamemasterModule = GamemasterModule;
-  window.CoinProjectile = CoinProjectile;
-}
+window.GamemasterModule = GamemasterModule;
