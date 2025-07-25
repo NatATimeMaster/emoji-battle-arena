@@ -1,27 +1,16 @@
 // Grinch Character Module
-// 👹 Grinch - Giant boulder splitting with blood drop healing system
+// 👹 Grinch - Boulder projectiles with splitting and blood drop collection
 
 class GrinchModule {
   static initializeAbilities(character) {
     if (character.emoji !== "👹") return;
     
     character.abilityData = {
-      // Boulder mechanics
-      lastBoulderTime: 0, // Last time a boulder was thrown
-      baseCooldown: 360, // 6 seconds at 60fps
-      reducedCooldown: 180, // 3 seconds at 60fps (50% reduction)
-      currentCooldown: 360, // Current cooldown being used
-      
-      // Blood drop mechanics
-      bloodDrops: [], // Array of blood drops in arena
-      bloodDropsCollected: 0, // Total blood drops collected
-      bloodDropLifetime: 300, // 5 seconds at 60fps
-      cooldownReduced: false, // Whether cooldown has been reduced
-      
-      // Boulder size references
-      giantBoulderSize: character.size * 2, // Giant boulder is 2x character size
-      boulderSize: character.size, // Boulder is 50% of giant (same as character)
-      rockSize: character.size * 0.5, // Rock is 25% of giant (50% of character)
+      lastBoulderTime: 0,
+      boulderCooldown: 360, // 6 seconds
+      bloodDrops: [],
+      bloodDropsCollected: 0,
+      cooldownReduced: false
     };
   }
 
@@ -29,71 +18,52 @@ class GrinchModule {
     if (character.emoji !== "👹" || character.isDead) return;
     
     const currentTime = gameTime;
-    const data = character.abilityData;
     
-    // Handle boulder throwing
-    this.handleBoulderThrowing(character, currentTime);
-    
-    // Update blood drops
-    this.updateBloodDrops(character, currentTime);
-    
-    // Check for blood drop collection
-    this.checkBloodDropCollection(character);
-  }
-
-  static handleBoulderThrowing(character, currentTime) {
-    const data = character.abilityData;
-    
-    // Check if cooldown has passed
-    if (currentTime - data.lastBoulderTime >= data.currentCooldown) {
-      this.throwGiantBoulder(character, currentTime);
+    // Boulder throwing
+    if (currentTime - character.abilityData.lastBoulderTime >= character.abilityData.boulderCooldown) {
+      this.throwBoulder(character);
+      character.abilityData.lastBoulderTime = currentTime;
     }
+    
+    // Clean up old blood drops
+    this.cleanupBloodDrops(character, currentTime);
   }
 
-  static throwGiantBoulder(character, currentTime) {
+  static throwBoulder(character) {
     const enemy = character.getNearestEnemy();
     if (!enemy) return;
     
-    const data = character.abilityData;
-    
     // Calculate direction towards enemy
     const angle = Math.atan2(enemy.y - character.y, enemy.x - character.x);
-    const speed = 2.5;
+    const speed = 2;
     
-    // Create giant boulder projectile
-    const giantBoulder = new Projectile(
+    // Create giant boulder (twice Grinch's size)
+    const boulder = new Projectile(
       character.x, character.y,
       Math.cos(angle) * speed, Math.sin(angle) * speed,
       "🪨", 8, character, "giantboulder",
-      { 
-        grinchOwner: character,
-        size: data.giantBoulderSize,
+      {
         boulderType: "giant",
-        bloodDrops: 4,
-        splitCount: 0
+        grinchOwner: character,
+        size: character.size * 2,
+        generation: 1 // Track splitting generation
       }
     );
     
-    projectiles.push(giantBoulder);
-    data.lastBoulderTime = currentTime;
-    
-    console.log(`Grinch threw giant boulder! 🪨 (Size: ${data.giantBoulderSize})`);
+    projectiles.push(boulder);
     audio.shoot();
+    console.log("👹 Grinch throws giant boulder!");
   }
 
   static handleBoulderHit(projectile, character) {
-    if (!this.isBoulderType(projectile.type)) return;
+    if (character.team === projectile.owner.team) return;
     
-    const owner = projectile.owner;
-    const data = projectile.data;
-    
-    if (character === owner) return; // Boulders don't hit Grinch
-    
-    // Apply damage based on boulder type
+    const boulderType = projectile.data.boulderType;
     let damage = 0;
     let bloodDropCount = 0;
     
-    switch (data.boulderType) {
+    // Determine damage and blood drops based on boulder type
+    switch (boulderType) {
       case "giant":
         damage = 8;
         bloodDropCount = 4;
@@ -108,335 +78,202 @@ class GrinchModule {
         break;
     }
     
-    character.takeDamage(damage, owner);
+    // Apply damage
+    character.takeDamage(damage, projectile.owner);
     
-    // Spawn blood drops at hit location
-    this.spawnBloodDrops(character.x, character.y, bloodDropCount, owner);
+    // Create blood drops at enemy location
+    this.createBloodDrops(projectile.owner, character.x, character.y, bloodDropCount);
     
-    console.log(`${data.boulderType} hit! ${damage} damage, ${bloodDropCount} blood drops spawned`);
+    console.log(`🪨 ${boulderType} hit for ${damage} damage! ${bloodDropCount} blood drops created.`);
     
     // Remove the boulder
     const index = projectiles.indexOf(projectile);
     if (index > -1) {
       projectiles.splice(index, 1);
     }
-    
-    audio.hit();
   }
 
   static handleBoulderWallBounce(projectile) {
-    if (!this.isBoulderType(projectile.type)) return false;
+    const boulderType = projectile.data.boulderType;
     
-    const data = projectile.data;
+    audio.bounce();
     
     // Split boulder based on type
-    if (data.boulderType === "giant") {
-      this.splitGiantBoulder(projectile);
-    } else if (data.boulderType === "boulder") {
-      this.splitBoulder(projectile);
-    } else if (data.boulderType === "rock") {
-      // Rocks vanish when hitting border
-      console.log(`Rock vanished on border hit! 🪨`);
-      const index = projectiles.indexOf(projectile);
-      if (index > -1) {
-        projectiles.splice(index, 1);
-      }
-      return false;
+    switch (boulderType) {
+      case "giant":
+        this.splitIntoSmallerBoulders(projectile, "boulder");
+        break;
+      case "boulder":
+        this.splitIntoSmallerBoulders(projectile, "rock");
+        break;
+      case "rock":
+        // Rocks vanish when hitting border
+        console.log("🪨 Rock vanished after hitting border");
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return false;
     }
     
-    // Remove original boulder after splitting
-    const index = projectiles.indexOf(projectile);
+    return false; // Remove original boulder after splitting
+  }
+
+  static splitIntoSmallerBoulders(originalBoulder, newType) {
+    const owner = originalBoulder.owner;
+    const x = originalBoulder.x;
+    const y = originalBoulder.y;
+    
+    // Determine new properties
+    let newEmoji = "🪨";
+    let newSize = originalBoulder.data.size * 0.5; // 50% of original size
+    let newDamage = 0;
+    
+    switch (newType) {
+      case "boulder":
+        newDamage = 4;
+        break;
+      case "rock":
+        newDamage = 2;
+        break;
+    }
+    
+    // Create 2 smaller boulders
+    for (let i = 0; i < 2; i++) {
+      const angle = (Math.PI * i) + Math.random() * Math.PI * 0.5; // Spread them out
+      const speed = 2;
+      
+      const smallerBoulder = new Projectile(
+        x, y,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        newEmoji, newDamage, owner, newType,
+        {
+          boulderType: newType,
+          grinchOwner: owner,
+          size: newSize,
+          generation: originalBoulder.data.generation + 1
+        }
+      );
+      
+      projectiles.push(smallerBoulder);
+    }
+    
+    console.log(`🪨 ${originalBoulder.data.boulderType} split into 2 ${newType}s!`);
+    
+    // Remove original boulder
+    const index = projectiles.indexOf(originalBoulder);
     if (index > -1) {
       projectiles.splice(index, 1);
     }
-    
-    audio.bounce();
-    return false; // Original boulder is removed
   }
 
-  static splitGiantBoulder(projectile) {
-    const data = projectile.data;
-    const owner = data.grinchOwner;
-    
-    // Create 2 boulders (50% of giant size)
-    const speed = 2;
-    const angles = [
-      Math.atan2(projectile.vy, projectile.vx) + Math.PI / 4,
-      Math.atan2(projectile.vy, projectile.vx) - Math.PI / 4
-    ];
-    
-    angles.forEach(angle => {
-      const boulder = new Projectile(
-        projectile.x, projectile.y,
-        Math.cos(angle) * speed, Math.sin(angle) * speed,
-        "🪨", 4, owner, "boulder",
-        { 
-          grinchOwner: owner,
-          size: owner.abilityData.boulderSize,
-          boulderType: "boulder",
-          bloodDrops: 2,
-          splitCount: 1
-        }
-      );
-      
-      projectiles.push(boulder);
-    });
-    
-    console.log(`Giant boulder split into 2 boulders! 🪨🪨`);
-  }
-
-  static splitBoulder(projectile) {
-    const data = projectile.data;
-    const owner = data.grinchOwner;
-    
-    // Create 2 rocks (25% of giant size = 50% of boulder size)
-    const speed = 1.5;
-    const angles = [
-      Math.atan2(projectile.vy, projectile.vx) + Math.PI / 3,
-      Math.atan2(projectile.vy, projectile.vx) - Math.PI / 3
-    ];
-    
-    angles.forEach(angle => {
-      const rock = new Projectile(
-        projectile.x, projectile.y,
-        Math.cos(angle) * speed, Math.sin(angle) * speed,
-        "🪨", 2, owner, "rock",
-        { 
-          grinchOwner: owner,
-          size: owner.abilityData.rockSize,
-          boulderType: "rock",
-          bloodDrops: 1,
-          splitCount: 2
-        }
-      );
-      
-      projectiles.push(rock);
-    });
-    
-    console.log(`Boulder split into 2 rocks! 🪨🪨`);
-  }
-
-  static spawnBloodDrops(x, y, count, grinch) {
-    const data = grinch.abilityData;
-    
+  static createBloodDrops(grinch, x, y, count) {
     for (let i = 0; i < count; i++) {
-      // Spawn blood drops in a small radius around hit location
-      const offsetX = (Math.random() - 0.5) * 40;
-      const offsetY = (Math.random() - 0.5) * 40;
+      // Scatter blood drops around the hit location
+      const offsetX = (Math.random() * 60) - 30;
+      const offsetY = (Math.random() * 60) - 30;
       
       const bloodDrop = {
         x: x + offsetX,
         y: y + offsetY,
-        spawnTime: gameTime,
-        collected: false,
-        grinchOwner: grinch
+        size: 15,
+        createdTime: gameTime,
+        lifetime: 300, // 5 seconds
+        collected: false
       };
       
-      data.bloodDrops.push(bloodDrop);
+      grinch.abilityData.bloodDrops.push(bloodDrop);
     }
     
-    console.log(`${count} blood drops spawned at (${Math.round(x)}, ${Math.round(y)})`);
+    console.log(`🩸 ${count} blood drops created!`);
   }
 
-  static updateBloodDrops(character, currentTime) {
+  static cleanupBloodDrops(character, currentTime) {
     const data = character.abilityData;
     
     // Remove expired blood drops
     data.bloodDrops = data.bloodDrops.filter(drop => {
-      const age = currentTime - drop.spawnTime;
-      if (age >= data.bloodDropLifetime) {
-        console.log(`Blood drop expired after 5 seconds 🩸`);
-        return false;
-      }
-      return true;
+      const age = currentTime - drop.createdTime;
+      return age < drop.lifetime && !drop.collected;
     });
   }
 
   static checkBloodDropCollection(character) {
     const data = character.abilityData;
     
-    // Check if Grinch is touching any blood drops
-    data.bloodDrops.forEach((drop, index) => {
+    data.bloodDrops.forEach(drop => {
       if (drop.collected) return;
       
       const distance = Math.hypot(character.x - drop.x, character.y - drop.y);
-      
-      if (distance < 25) { // Collection radius
-        this.collectBloodDrop(character, index);
+      if (distance < character.size + drop.size) {
+        // Collect blood drop
+        this.collectBloodDrop(character, drop);
       }
     });
   }
 
-  static collectBloodDrop(character, dropIndex) {
+  static collectBloodDrop(character, drop) {
     const data = character.abilityData;
-    const drop = data.bloodDrops[dropIndex];
     
-    if (drop.collected) return;
-    
-    // Mark as collected and remove
+    // Mark as collected
     drop.collected = true;
-    data.bloodDrops.splice(dropIndex, 1);
     
     // Heal Grinch
     character.heal(3);
+    
+    // Increment collection counter
     data.bloodDropsCollected++;
     
-    console.log(`Blood drop collected! +3 HP. Total collected: ${data.bloodDropsCollected}/10`);
+    console.log(`🩸 Blood drop collected! Healed 3 HP. Total collected: ${data.bloodDropsCollected}`);
     
     // Check for cooldown reduction
     if (data.bloodDropsCollected >= 10 && !data.cooldownReduced) {
       data.cooldownReduced = true;
-      data.currentCooldown = data.reducedCooldown;
-      console.log(`🩸 Bloodlust achieved! Boulder cooldown reduced to 3 seconds! 🩸`);
+      data.boulderCooldown = 180; // Reduce to 3 seconds (50% reduction)
+      console.log("👹 Bloodlust activated! Boulder cooldown reduced to 3 seconds!");
       audio.ability();
     }
-    
-    audio.hit();
   }
 
   static drawBloodDrops(ctx, character) {
+    if (character.emoji !== "👹") return;
+    
     const data = character.abilityData;
     
     data.bloodDrops.forEach(drop => {
       if (drop.collected) return;
       
       ctx.save();
-      ctx.font = "20px serif";
+      ctx.font = `${drop.size}px serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       
-      // Add blood glow
-      ctx.shadowColor = "#8b0000";
-      ctx.shadowBlur = 8;
-      
       // Add pulsing effect
-      const age = gameTime - drop.spawnTime;
-      const pulse = Math.sin(age * 0.2) * 0.3 + 0.7;
+      const pulse = Math.sin((gameTime - drop.createdTime) * 0.1) * 0.2 + 0.8;
       ctx.globalAlpha = pulse;
-      
-      // Fade out as it approaches expiration
-      const fadeStart = data.bloodDropLifetime * 0.7; // Start fading at 70% lifetime
-      if (age > fadeStart) {
-        const fadeProgress = (age - fadeStart) / (data.bloodDropLifetime - fadeStart);
-        ctx.globalAlpha *= (1 - fadeProgress);
-      }
       
       ctx.fillText("🩸", drop.x, drop.y);
       ctx.restore();
     });
   }
 
-  static isBoulderType(type) {
-    return type === "giantboulder" || type === "boulder" || type === "rock";
-  }
-
   static handleCharacterDeath(character) {
-    // Clean up when Grinch dies
-    if (character.emoji === "👹") {
-      const data = character.abilityData;
-      
-      // Remove all blood drops
-      data.bloodDrops = [];
-      
-      // Remove all boulder projectiles
-      projectiles = projectiles.filter(p => {
-        if (this.isBoulderType(p.type) && p.owner === character) {
-          return false;
-        }
-        return true;
-      });
-    }
-  }
-
-  static getStatusInfo(character) {
-    if (character.emoji !== "👹" || !character.abilityData) return null;
+    if (character.emoji !== "👹") return;
     
-    const data = character.abilityData;
-    return {
-      bloodDropsCollected: data.bloodDropsCollected,
-      activeBloodDrops: data.bloodDrops.length,
-      cooldownReduced: data.cooldownReduced,
-      currentCooldown: data.currentCooldown / 60 // Convert to seconds
-    };
+    // Clear blood drops when Grinch dies
+    character.abilityData.bloodDrops = [];
+    console.log("👹 Grinch died, blood drops cleared");
   }
 }
 
-// Boulder Projectile class extension
 class BoulderProjectile extends Projectile {
-  constructor(x, y, vx, vy, emoji, damage, owner, type, data) {
-    super(x, y, vx, vy, emoji, damage, owner, type, data);
-    this.size = data.size; // Override size based on boulder type
-  }
-
   update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.age++;
-
-    // Handle wall bouncing and splitting
-    const margin = this.size / 2;
-    let hitWall = false;
-
-    if (this.x <= margin) {
-      this.x = margin;
-      this.vx *= -1;
-      hitWall = true;
-    } else if (this.x >= canvas.width - margin) {
-      this.x = canvas.width - margin;
-      this.vx *= -1;
-      hitWall = true;
-    }
-
-    if (this.y <= margin) {
-      this.y = margin;
-      this.vy *= -1;
-      hitWall = true;
-    } else if (this.y >= canvas.height - margin) {
-      this.y = canvas.height - margin;
-      this.vy *= -1;
-      hitWall = true;
-    }
-
-    if (hitWall) {
-      return GrinchModule.handleBoulderWallBounce(this);
-    }
-
-    return true;
+    return super.update();
   }
 
   draw(ctx) {
-    ctx.save();
-    
-    // Scale font based on boulder size
-    const fontSize = this.size * 1.5;
-    ctx.font = `${fontSize}px serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Add boulder glow effect based on type
-    if (this.data.boulderType === "giant") {
-      ctx.shadowColor = "#8b4513";
-      ctx.shadowBlur = 15;
-    } else if (this.data.boulderType === "boulder") {
-      ctx.shadowColor = "#8b4513";
-      ctx.shadowBlur = 10;
-    } else if (this.data.boulderType === "rock") {
-      ctx.shadowColor = "#8b4513";
-      ctx.shadowBlur = 5;
-    }
-    
-    // Add rotation effect
-    const rotation = this.age * 0.05;
-    ctx.translate(this.x, this.y);
-    ctx.rotate(rotation);
-    
-    ctx.fillText(this.emoji, 0, 0);
-    ctx.restore();
+    super.draw(ctx);
   }
 }
 
-// Export for global access
-if (typeof window !== 'undefined') {
-  window.GrinchModule = GrinchModule;
-  window.BoulderProjectile = BoulderProjectile;
-}
+window.GrinchModule = GrinchModule;
