@@ -473,12 +473,12 @@
             constructor(x, y, element) {
                 this.x = x;
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = (Math.random() - 0.5) * 2;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
                 this.element = element;
                 this.width = 20;
                 this.height = 20;
-                this.friction = 0.98;
+                this.friction = 0.995; // Less friction to maintain movement longer
                 this.speed = 1;
             }
 
@@ -508,6 +508,17 @@
                 // Apply friction
                 this.vx *= this.friction;
                 this.vy *= this.friction;
+
+                // Maintain minimum speed for constant movement
+                const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                const minSpeed = 0.5;
+                
+                if (currentSpeed < minSpeed) {
+                    // Boost velocity to maintain movement
+                    const angle = Math.random() * Math.PI * 2;
+                    this.vx = Math.cos(angle) * minSpeed;
+                    this.vy = Math.sin(angle) * minSpeed;
+                }
 
                 // Update element position
                 this.element.style.left = this.x + 'px';
