@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zombie Survival Building Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            height: 60px;
+            box-sizing: border-box;
+        }
+
+        .floor-info {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .game-area {
+            flex: 1;
+            position: relative;
+            background: #444;
+            border: 2px solid #666;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .room {
+            width: 80%;
+            height: 80%;
+            background: #666;
+            border: 3px solid #888;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 10px;
+        }
+
+        .laboratory {
+            width: 80px;
+            height: 60px;
+            background: #00ff00;
+            border: 2px solid #00aa00;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: black;
+            font-weight: bold;
+        }
+
+        .lab-label {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: white;
+        }
+
+        .exit {
+            width: 40px;
+            height: 30px;
+            background: #ff0000;
+            border: 2px solid #aa0000;
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .knife {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .character {
+            position: absolute;
+            font-size: 20px;
+            user-select: none;
+            z-index: 10;
+            transition: none;
+        }
+
+        .character-name {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: white;
+            white-space: nowrap;
+            background: rgba(0,0,0,0.7);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .virus {
+            position: absolute;
+            font-size: 16px;
+            z-index: 15;
+        }
+
+        .cure {
+            position: absolute;
+            font-size: 16px;
+            z-index: 15;
+        }
+
+        .bottom-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            height: 80px;
+            align-items: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #333;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .choice-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+
+        .choice-button {
+            padding: 10px;
+            background: #555;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .choice-button:hover {
+            background: #777;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            margin: 10px;
+            border: 1px solid #666;
+            border-radius: 5px;
+            background: #555;
+            color: white;
+        }
+
+        .notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.9);
+            color: black;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 100;
+            display: none;
+        }
+
+        .blinking {
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .survivors-list {
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .survivor-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: #555;
+            border-radius: 3px;
+        }
+
+        .killer-name {
+            color: red !important;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                height: auto;
+                padding: 5px;
+            }
+            
+            .stats {
+                font-size: 14px;
+                gap: 10px;
+            }
+            
+            .bottom-controls {
+                height: 60px;
+            }
+            
+            button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="floor-info">Floor <span id="current-floor">50</span></div>
+            <div class="stats">
+                <div>People: <span id="people-count">5</span>/20</div>
+                <div>Doctors: <span id="doctors-count">0</span>/3</div>
+                <div>Zombies: <span id="zombies-count">0</span></div>
+            </div>
+            <div class="controls">
+                <button onclick="showSurvivorsModal()">View Stats</button>
+                <button onclick="saveGame()">Save</button>
+                <button onclick="loadGame()">Load</button>
+                <button onclick="changeFloor(-10)" id="go-up">Go Up</button>
+                <button onclick="changeFloor(10)" id="go-down">Go Down</button>
+            </div>
+        </div>
+
+        <div class="game-area">
+            <div class="room">
+                <div class="laboratory" id="laboratory" style="display: none;">
+                    <div class="lab-label">Laboratory</div>
+                    LAB
+                </div>
+                <div class="exit" id="exit">Exit</div>
+                <div class="knife" id="knife">🔪</div>
+            </div>
+            <div class="notification" id="notification"></div>
+        </div>
+
+        <div class="bottom-controls">
+            <button onclick="showAddCharacterModal()" id="add-character-btn">Add Character</button>
+            <button onclick="startGame()" id="start-game-btn" style="display: none;">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Add Character Modal -->
+    <div class="modal" id="add-character-modal">
+        <div class="modal-content">
+            <h3>Add Character</h3>
+            <div class="choice-buttons">
+                <button class="choice-button" onclick="selectCharacterType('civilian')">Civilian</button>
+                <button class="choice-button" onclick="selectCharacterType('doctor')">Doctor</button>
+            </div>
+            <div id="character-choices" style="display: none;">
+                <div class="choice-buttons" id="choice-buttons"></div>
+                <input type="text" id="character-name-input" placeholder="Enter character name" maxlength="10">
+                <br>
+                <button onclick="addCharacter()">Add</button>
+                <button onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Game Modal -->
+    <div class="modal" id="start-game-modal">
+        <div class="modal-content">
+            <h3>All characters filled!</h3>
+            <p>Ready to start the survival simulation?</p>
+            <button onclick="confirmStartGame()">Start</button>
+        </div>
+    </div>
+
+    <!-- Survivors Modal -->
+    <div class="modal" id="survivors-modal">
+        <div class="modal-content">
+            <h3>Game Statistics</h3>
+            <div class="survivors-list" id="survivors-content"></div>
+            <button onclick="closeSurvivorsModal()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            currentFloor: 50,
+            gameStarted: false,
+            characters: [],
+            gameObjects: [],
+            stats: {
+                survivors: [],
+                doctors: [],
+                killers: []
+            },
+            timers: {},
+            exitOpen: false,
+            labOpen: true,
+            virusReleased: false,
+            cureInProgress: false,
+            cureTimer: 0,
+            requiredCureTime: 0
+        };
+
+        // Character types and emojis
+        const characterEmojis = {
+            civilian: {
+                A: '👱🏻',
+                B: '👱🏻‍♀️', 
+                C: '👱🏻‍♂️'
+            },
+            doctor: {
+                A: '🧑🏻‍⚕️',
+                B: '👩🏻‍⚕️',
+                C: '👨🏻‍⚕️'
+            },
+            zombie: {
+                A: '🧟',
+                B: '🧟‍♀️',
+                C: '🧟‍♂️'
+            }
+        };
+
+        // Initial NPCs
+        const initialNPCs = [
+            { emoji: '👩🏽‍🦲', name: 'Gerald', type: 'civilian', zombieType: 'C' },
+            { emoji: '🧑🏼‍🦱', name: 'Vincent', type: 'civilian', zombieType: 'A' },
+            { emoji: '👨🏻‍🦱', name: 'Jake', type: 'civilian', zombieType: 'C' },
+            { emoji: '👩🏻‍🦱', name: 'Maria', type: 'civilian', zombieType: 'B' },
+            { emoji: '👱🏻', name: 'Shiela', type: 'civilian', zombieType: 'A' }
+        ];
+
+        // Sound effects
+        const sounds = {
+            zombieHit: () => playSound(200, 0.1),
+            kill: () => playSound(150, 0.2),
+            cure: () => playSound(400, 0.3),
+            exit: () => playSound(300, 0.2),
+            cureComplete: () => playSound(500, 0.5),
+            transform: () => playSound(100, 0.3)
+        };
+
+        function playSound(frequency, duration) {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = frequency;
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + duration);
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
+
+        // Physics and movement
+        class PhysicsObject {
+            constructor(x, y, element) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.element = element;
+                this.width = 20;
+                this.height = 20;
+                this.friction = 0.98;
+                this.speed = 1;
+            }
+
+            update() {
+                this.x += this.vx * this.speed;
+                this.y += this.vy * this.speed;
+
+                // Bounce off walls
+                const room = document.querySelector('.room');
+                const roomRect = room.getBoundingClientRect();
+                const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+                
+                const roomLeft = roomRect.left - gameRect.left + 10;
+                const roomRight = roomRect.right - gameRect.left - 30;
+                const roomTop = roomRect.top - gameRect.top + 10;
+                const roomBottom = roomRect.bottom - gameRect.top - 30;
+
+                if (this.x <= roomLeft || this.x >= roomRight) {
+                    this.vx *= -1;
+                    this.x = Math.max(roomLeft, Math.min(roomRight, this.x));
+                }
+                if (this.y <= roomTop || this.y >= roomBottom) {
+                    this.vy *= -1;
+                    this.y = Math.max(roomTop, Math.min(roomBottom, this.y));
+                }
+
+                // Apply friction
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+
+                // Update element position
+                this.element.style.left = this.x + 'px';
+                this.element.style.top = this.y + 'px';
+            }
+
+            checkCollision(other) {
+                const dx = this.x - other.x;
+                const dy = this.y - other.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < 25;
+            }
+        }
+
+        // Character class
+        class Character extends PhysicsObject {
+            constructor(x, y, emoji, name, type, zombieType) {
+                const element = document.createElement('div');
+                element.className = 'character';
+                element.innerHTML = `
+                    <div class="character-name">${name}</div>
+                    ${emoji}
+                `;
+                document.querySelector('.game-area').appendChild(element);
+                
+                super(x, y, element);
+                this.emoji = emoji;
+                this.name = name;
+                this.type = type;
+                this.zombieType = zombieType;
+                this.isZombie = false;
+                this.isInfected = false;
+                this.infectionTimer = 0;
+                this.isKiller = false;
+                this.isCrazyKiller = false;
+                this.hasCure = false;
+                this.inLab = false;
+            }
+
+            becomeZombie() {
+                if (this.isZombie) return;
+                
+                this.isZombie = true;
+                this.isInfected = false;
+                this.element.innerHTML = `
+                    <div class="character-name">${this.name}</div>
+                    ${characterEmojis.zombie[this.zombieType]}
+                `;
+                this.element.classList.remove('blinking');
+                sounds.transform();
+                updateStats();
+                
+                if (this.isKiller) {
+                    this.dropKnife();
+                }
+                if (this.hasCure) {
+                    this.dropCure();
+                }
+            }
+
+            becomeHuman() {
+                if (!this.isZombie) return;
+                
+                this.isZombie = false;
+                this.element.innerHTML = `
+                    <div class="character-name">${this.name}</div>
+                    ${this.emoji}
+                `;
+                sounds.cure();
+                updateStats();
+            }
+
+            startInfection() {
+                if (this.isZombie || this.isInfected) return;
+                
+                this.isInfected = true;
+                this.infectionTimer = 5;
+                this.element.classList.add('blinking');
+                sounds.zombieHit();
+                
+                const countdown = setInterval(() => {
+                    this.infectionTimer--;
+                    if (this.infectionTimer <= 0) {
+                        clearInterval(countdown);
+                        this.becomeZombie();
+                    }
+                }, 1000);
+            }
+
+            becomeKiller() {
+                this.isKiller = true;
+                gameState.stats.killers.push({
+                    name: this.name,
+                    zombiesKilled: 0,
+                    humansKilled: 0,
+                    isZombie: false
+                });
+            }
+
+            becomeCrazyKiller() {
+                this.isCrazyKiller = true;
+            }
+
+            dropKnife() {
+                this.isKiller = false;
+                this.isCrazyKiller = false;
+                const knife = document.getElementById('knife');
+                knife.style.display = 'block';
+                knife.style.left = this.x + 'px';
+                knife.style.top = this.y + 'px';
+            }
+
+            dropCure() {
+                this.hasCure = false;
+                createCure(this.x, this.y);
+            }
+
+            kill() {
+                sounds.kill();
+                this.element.remove();
+                const index = gameState.characters.indexOf(this);
+                if (index > -1) {
+                    gameState.characters.splice(index, 1);
+                }
+                updateStats();
+            }
+
+            exitFloor() {
+                sounds.exit();
+                
+                // Add to survivors list
+                gameState.stats.survivors.push({
+                    name: this.name,
+                    floor: gameState.currentFloor - 10,
+                    status: this.isZombie ? 'zombie' : (this.isKiller ? 'killer' : (this.type === 'doctor' ? 'doctor' : 'civilian'))
+                });
+
+                // Save character for next floor
+                const nextFloorData = {
+                    emoji: this.isZombie ? characterEmojis.zombie[this.zombieType] : this.emoji,
+                    name: this.name,
+                    type: this.type,
+                    zombieType: this.zombieType,
+                    isZombie: this.isZombie,
+                    isKiller: this.isKiller,
+                    isCrazyKiller: this.isCrazyKiller,
+                    hasCure: this.hasCure
+                };
+                
+                let nextFloorChars = JSON.parse(localStorage.getItem(`floor_${gameState.currentFloor - 10}_characters`) || '[]');
+                nextFloorChars.push(nextFloorData);
+                localStorage.setItem(`floor_${gameState.currentFloor - 10}_characters`, JSON.stringify(nextFloorChars));
+
+                this.element.remove();
+                const index = gameState.characters.indexOf(this);
+                if (index > -1) {
+                    gameState.characters.splice(index, 1);
+                }
+                updateStats();
+            }
+        }
+
+        // Virus class
+        class Virus extends PhysicsObject {
+            constructor(x, y) {
+                const element = document.createElement('div');
+                element.className = 'virus';
+                element.innerHTML = '🦠';
+                document.querySelector('.game-area').appendChild(element);
+                
+                super(x, y, element);
+                this.speed = 0.5;
+            }
+
+            checkCollisionWithCharacters() {
+                for (let character of gameState.characters) {
+                    if (this.checkCollision(character) && !character.isZombie) {
+                        character.startInfection();
+                        this.element.remove();
+                        const index = gameState.gameObjects.indexOf(this);
+                        if (index > -1) {
+                            gameState.gameObjects.splice(index, 1);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Cure class
+        class Cure extends PhysicsObject {
+            constructor(x, y) {
+                const element = document.createElement('div');
+                element.className = 'cure';
+                element.innerHTML = '🧪';
+                document.querySelector('.game-area').appendChild(element);
+                
+                super(x, y, element);
+                this.speed = 0.3;
+            }
+
+            checkCollisionWithCharacters() {
+                for (let character of gameState.characters) {
+                    if (this.checkCollision(character) && !character.isZombie && character.type === 'civilian') {
+                        character.hasCure = true;
+                        this.element.remove();
+                        const index = gameState.gameObjects.indexOf(this);
+                        if (index > -1) {
+                            gameState.gameObjects.splice(index, 1);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Initialize game
+        function initGame() {
+            updateFloorDisplay();
+            loadCharactersForFloor();
+            if (gameState.characters.length === 0) {
+                addInitialNPCs();
+            }
+            updateStats();
+            
+            // Set up knife click handler
+            document.getElementById('knife').onclick = function() {
+                const knife = this;
+                if (knife.style.display === 'none') return;
+                
+                // Find nearest civilian
+                let nearestCivilian = null;
+                let minDistance = Infinity;
+                
+                for (let character of gameState.characters) {
+                    if (!character.isZombie && !character.isKiller && character.type === 'civilian') {
+                        const distance = Math.sqrt(
+                            Math.pow(character.x - parseInt(knife.style.left || 0), 2) +
+                            Math.pow(character.y - parseInt(knife.style.top || 0), 2)
+                        );
+                        if (distance < minDistance && distance < 50) {
+                            minDistance = distance;
+                            nearestCivilian = character;
+                        }
+                    }
+                }
+                
+                if (nearestCivilian) {
+                    nearestCivilian.becomeKiller();
+                    knife.style.display = 'none';
+                }
+            };
+        }
+
+        function addInitialNPCs() {
+            const room = document.querySelector('.room');
+            const roomRect = room.getBoundingClientRect();
+            const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            
+            initialNPCs.forEach((npc, index) => {
+                const x = (roomRect.left - gameRect.left) + 50 + (index * 40);
+                const y = (roomRect.top - gameRect.top) + 50 + (index * 30);
+                
+                const character = new Character(x, y, npc.emoji, npc.name, npc.type, npc.zombieType);
+                gameState.characters.push(character);
+            });
+        }
+
+        function updateFloorDisplay() {
+            document.getElementById('current-floor').textContent = gameState.currentFloor;
+            
+            // Show lab only on specific floors
+            const hasLab = [50, 40, 30, 20, 10].includes(gameState.currentFloor);
+            document.getElementById('laboratory').style.display = hasLab ? 'block' : 'none';
+        }
+
+        function updateStats() {
+            const people = gameState.characters.length;
+            const doctors = gameState.characters.filter(c => c.type === 'doctor' && !c.isZombie).length;
+            const zombies = gameState.characters.filter(c => c.isZombie).length;
+            
+            document.getElementById('people-count').textContent = people;
+            document.getElementById('doctors-count').textContent = doctors;
+            document.getElementById('zombies-count').textContent = zombies;
+            
+            // Show start button if at max capacity
+            if (people >= 20) {
+                document.getElementById('add-character-btn').style.display = 'none';
+                document.getElementById('start-game-btn').style.display = 'block';
+                showModal('start-game-modal');
+            }
+        }
+
+        // Character addition system
+        let selectedCharacterType = '';
+        let selectedEmoji = '';
+
+        function showAddCharacterModal() {
+            if (gameState.characters.length >= 20) return;
+            showModal('add-character-modal');
+        }
+
+        function selectCharacterType(type) {
+            selectedCharacterType = type;
+            
+            const doctorCount = gameState.characters.filter(c => c.type === 'doctor').length;
+            if (type === 'doctor' && doctorCount >= 3) {
+                alert('Maximum doctors (3) already reached for this floor!');
+                return;
+            }
+            
+            const choicesDiv = document.getElementById('character-choices');
+            const buttonsDiv = document.getElementById('choice-buttons');
+            
+            buttonsDiv.innerHTML = '';
+            
+            const choices = type === 'civilian' ? 
+                [{ key: 'A', emoji: '👱🏻' }, { key: 'B', emoji: '👱🏻‍♀️' }, { key: 'C', emoji: '👱🏻‍♂️' }] :
+                [{ key: 'A', emoji: '🧑🏻‍⚕️' }, { key: 'B', emoji: '👩🏻‍⚕️' }, { key: 'C', emoji: '👨🏻‍⚕️' }];
+            
+            choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.className = 'choice-button';
+                button.innerHTML = `${choice.key} ${choice.emoji}`;
+                button.onclick = () => selectEmoji(choice.key, choice.emoji);
+                buttonsDiv.appendChild(button);
+            });
+            
+            choicesDiv.style.display = 'block';
+        }
+
+        function selectEmoji(key, emoji) {
+            selectedEmoji = emoji;
+            selectedEmojiKey = key;
+        }
+
+        function addCharacter() {
+            const name = document.getElementById('character-name-input').value.trim();
+            if (!name || !selectedEmoji) {
+                alert('Please select a character type and enter a name!');
+                return;
+            }
+            
+            if (gameState.characters.length >= 20) {
+                alert('Maximum characters reached!');
+                return;
+            }
+            
+            const room = document.querySelector('.room');
+            const roomRect = room.getBoundingClientRect();
+            const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            
+            const x = (roomRect.left - gameRect.left) + Math.random() * 200 + 50;
+            const y = (roomRect.top - gameRect.top) + Math.random() * 150 + 50;
+            
+            const character = new Character(x, y, selectedEmoji, name, selectedCharacterType, selectedEmojiKey);
+            gameState.characters.push(character);
+            
+            if (selectedCharacterType === 'doctor') {
+                gameState.stats.doctors.push({
+                    name: name,
+                    status: 'human',
+                    success: 'none'
+                });
+            }
+            
+            updateStats();
+            closeModal();
+            
+            // Reset selections
+            selectedCharacterType = '';
+            selectedEmoji = '';
+            document.getElementById('character-name-input').value = '';
+        }
+
+        // Game mechanics
+        function startGame() {
+            if (gameState.gameStarted) return;
+            
+            gameState.gameStarted = true;
+            document.getElementById('add-character-btn').style.display = 'none';
+            document.getElementById('start-game-btn').style.display = 'none';
+            
+            // Close lab initially
+            gameState.labOpen = false;
+            
+            // Release virus after 10 seconds
+            setTimeout(() => {
+                releaseVirus();
+            }, 10000);
+            
+            // Open exit after 20 seconds of zombie infiltration
+            setTimeout(() => {
+                checkForZombieInfiltration();
+            }, 1000);
+            
+            // Start game loop
+            gameLoop();
+        }
+
+        function confirmStartGame() {
+            closeModal();
+            startGame();
+        }
+
+        function releaseVirus() {
+            if (!document.getElementById('laboratory').style.display === 'block') return;
+            
+            gameState.virusReleased = true;
+            gameState.labOpen = true;
+            
+            const lab = document.getElementById('laboratory');
+            const labRect = lab.getBoundingClientRect();
+            const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            
+            const x = labRect.left - gameRect.left + 40;
+            const y = labRect.bottom - gameRect.top;
+            
+            const virus = new Virus(x, y);
+            gameState.gameObjects.push(virus);
+            
+            showNotification('Virus released! Lab will reopen in 10 seconds...');
+            
+            // Close lab for 10 seconds
+            gameState.labOpen = false;
+            setTimeout(() => {
+                gameState.labOpen = true;
+                showNotification('The lab has been cleared!');
+            }, 10000);
+        }
+
+        function checkForZombieInfiltration() {
+            if (!gameState.gameStarted) return;
+            
+            const hasZombies = gameState.characters.some(c => c.isZombie);
+            if (hasZombies && !gameState.exitOpen) {
+                gameState.exitOpen = true;
+                showNotification('Exit opened! 20 seconds to escape!');
+                
+                setTimeout(() => {
+                    gameState.exitOpen = false;
+                    showNotification('Exit closed permanently!');
+                }, 20000);
+            }
+            
+            setTimeout(() => {
+                checkForZombieInfiltration();
+            }, 1000);
+        }
+
+        function createCure(x, y) {
+            const cure = new Cure(x, y);
+            gameState.gameObjects.push(cure);
+        }
+
+        function checkLabInteractions() {
+            if (!gameState.labOpen) return;
+            
+            const lab = document.getElementById('laboratory');
+            if (lab.style.display === 'none') return;
+            
+            const labRect = lab.getBoundingClientRect();
+            const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            
+            const labX = labRect.left - gameRect.left;
+            const labY = labRect.top - gameRect.top;
+            const labWidth = labRect.width;
+            const labHeight = labRect.height;
+            
+            let doctorsInLab = 0;
+            let civiliansInLab = 0;
+            let zombiesInLab = 0;
+            
+            for (let character of gameState.characters) {
+                const inLab = character.x >= labX && character.x <= labX + labWidth &&
+                            character.y >= labY && character.y <= labY + labHeight;
+                
+                if (inLab) {
+                    character.inLab = true;
+                    if (character.type === 'doctor' && !character.isZombie) {
+                        doctorsInLab++;
+                    } else if (character.type === 'civilian' && !character.isZombie) {
+                        civiliansInLab++;
+                    } else if (character.isZombie) {
+                        zombiesInLab++;
+                    }
+                } else {
+                    character.inLab = false;
+                }
+            }
+            
+            // Handle cure creation
+            if (doctorsInLab > 0 && !gameState.cureInProgress) {
+                gameState.cureInProgress = true;
+                gameState.requiredCureTime = doctorsInLab === 1 ? 15 : doctorsInLab === 2 ? 10 : 5;
+                gameState.requiredCureTime += civiliansInLab * 5; // Civilians slow it down
+                gameState.cureTimer = gameState.requiredCureTime;
+            }
+            
+            if (gameState.cureInProgress) {
+                if (doctorsInLab === 0) {
+                    // Reset if no doctors in lab
+                    gameState.cureInProgress = false;
+                    gameState.cureTimer = 0;
+                } else {
+                    gameState.cureTimer -= 1/60; // Decrease by 1/60 second per frame
+                    if (gameState.cureTimer <= 0) {
+                        // Cure completed
+                        gameState.cureInProgress = false;
+                        sounds.cureComplete();
+                        
+                        // Give cure to a doctor in lab
+                        for (let character of gameState.characters) {
+                            if (character.inLab && character.type === 'doctor' && !character.isZombie) {
+                                character.hasCure = true;
+                                break;
+                            }
+                        }
+                        
+                        showNotification('Cure completed!');
+                    }
+                }
+            }
+            
+            // Handle zombie infections in lab
+            if (zombiesInLab > 0) {
+                for (let character of gameState.characters) {
+                    if (character.inLab && character.type === 'doctor' && !character.isZombie && !character.isInfected) {
+                        character.startInfection();
+                    }
+                }
+            }
+        }
+
+        function checkExitInteractions() {
+            if (!gameState.exitOpen) return;
+            
+            const exit = document.getElementById('exit');
+            const exitRect = exit.getBoundingClientRect();
+            const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            
+            const exitX = exitRect.left - gameRect.left;
+            const exitY = exitRect.top - gameRect.top;
+            const exitWidth = exitRect.width;
+            const exitHeight = exitRect.height;
+            
+            for (let i = gameState.characters.length - 1; i >= 0; i--) {
+                const character = gameState.characters[i];
+                
+                if (character.x >= exitX && character.x <= exitX + exitWidth &&
+                    character.y >= exitY && character.y <= exitY + exitHeight) {
+                    character.exitFloor();
+                }
+            }
+        }
+
+        function checkCharacterInteractions() {
+            for (let i = 0; i < gameState.characters.length; i++) {
+                for (let j = i + 1; j < gameState.characters.length; j++) {
+                    const char1 = gameState.characters[i];
+                    const char2 = gameState.characters[j];
+                    
+                    if (char1.checkCollision(char2)) {
+                        handleCharacterCollision(char1, char2);
+                    }
+                }
+            }
+        }
+
+        function handleCharacterCollision(char1, char2) {
+            // Zombie infection
+            if ((char1.isZombie && !char2.isZombie && !char2.isInfected) ||
+                (char2.isZombie && !char1.isZombie && !char1.isInfected)) {
+                const zombie = char1.isZombie ? char1 : char2;
+                const human = char1.isZombie ? char2 : char1;
+                human.startInfection();
+            }
+            
+            // Cure interactions
+            if ((char1.hasCure && char2.isZombie) || (char2.hasCure && char1.isZombie)) {
+                const curer = char1.hasCure ? char1 : char2;
+                const zombie = char1.hasCure ? char2 : char1;
+                
+                // Count nearby zombies
+                let nearbyZombies = 0;
+                for (let char of gameState.characters) {
+                    if (char.isZombie && curer.checkCollision(char)) {
+                        nearbyZombies++;
+                    }
+                }
+                
+                if (nearbyZombies > 1) {
+                    // Curer becomes zombie
+                    curer.startInfection();
+                    curer.hasCure = false;
+                } else {
+                    // Cure the zombie
+                    zombie.becomeHuman();
+                    curer.hasCure = false;
+                }
+            }
+            
+            // Killer interactions
+            if (char1.isKiller || char2.isKiller) {
+                const killer = char1.isKiller ? char1 : char2;
+                const target = char1.isKiller ? char2 : char1;
+                
+                // Count nearby zombies attacking killer
+                let zombiesAttacking = 0;
+                for (let char of gameState.characters) {
+                    if (char.isZombie && killer.checkCollision(char)) {
+                        zombiesAttacking++;
+                    }
+                }
+                
+                if (zombiesAttacking >= 2) {
+                    // Killer becomes zombie
+                    killer.startInfection();
+                    killer.dropKnife();
+                } else {
+                    // Killer kills target
+                    let canKill = false;
+                    
+                    if (target.isZombie || target.isInfected) {
+                        canKill = true;
+                    } else if (target.type === 'doctor') {
+                        canKill = true;
+                        if (!killer.isCrazyKiller) {
+                            killer.becomeCrazyKiller();
+                        }
+                    } else if (killer.isCrazyKiller) {
+                        canKill = true;
+                    } else if (target.isKiller) {
+                        canKill = true;
+                    }
+                    
+                    if (canKill) {
+                        // Update killer stats
+                        const killerStat = gameState.stats.killers.find(k => k.name === killer.name);
+                        if (killerStat) {
+                            if (target.isZombie) {
+                                killerStat.zombiesKilled++;
+                            } else {
+                                killerStat.humansKilled++;
+                            }
+                        }
+                        
+                        target.kill();
+                    }
+                }
+            }
+        }
+
+        function checkWinConditions() {
+            const zombies = gameState.characters.filter(c => c.isZombie);
+            const killers = gameState.characters.filter(c => c.isKiller);
+            const humans = gameState.characters.filter(c => !c.isZombie);
+            
+            if (zombies.length === 0 && killers.length > 0) {
+                showNotification('The Killer has succeeded!');
+            } else if (zombies.length === 0 && gameState.virusReleased) {
+                showNotification('All zombies have been cured! The doctors won!');
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.gameStarted) return;
+            
+            // Update all physics objects
+            [...gameState.characters, ...gameState.gameObjects].forEach(obj => {
+                obj.update();
+                if (obj instanceof Virus) {
+                    obj.checkCollisionWithCharacters();
+                } else if (obj instanceof Cure) {
+                    obj.checkCollisionWithCharacters();
+                }
+            });
+            
+            checkCharacterInteractions();
+            checkLabInteractions();
+            checkExitInteractions();
+            checkWinConditions();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Floor navigation
+        function changeFloor(direction) {
+            const newFloor = gameState.currentFloor + direction;
+            if (newFloor < 10 || newFloor > 50) return;
+            
+            // Save current floor state
+            saveFloorState();
+            
+            gameState.currentFloor = newFloor;
+            
+            // Clear current characters and objects
+            gameState.characters.forEach(char => char.element.remove());
+            gameState.gameObjects.forEach(obj => obj.element.remove());
+            gameState.characters = [];
+            gameState.gameObjects = [];
+            
+            // Load new floor
+            loadCharactersForFloor();
+            updateFloorDisplay();
+            updateStats();
+            
+            gameState.gameStarted = false;
+            document.getElementById('add-character-btn').style.display = 'block';
+            document.getElementById('start-game-btn').style.display = 'none';
+        }
+
+        function saveFloorState() {
+            const floorData = {
+                characters: gameState.characters.map(char => ({
+                    emoji: char.emoji,
+                    name: char.name,
+                    type: char.type,
+                    zombieType: char.zombieType,
+                    isZombie: char.isZombie,
+                    isKiller: char.isKiller,
+                    isCrazyKiller: char.isCrazyKiller,
+                    hasCure: char.hasCure,
+                    x: char.x,
+                    y: char.y
+                })),
+                gameStarted: gameState.gameStarted
+            };
+            
+            localStorage.setItem(`floor_${gameState.currentFloor}`, JSON.stringify(floorData));
+        }
+
+        function loadCharactersForFloor() {
+            const floorData = JSON.parse(localStorage.getItem(`floor_${gameState.currentFloor}`) || '{}');
+            
+            if (floorData.characters) {
+                floorData.characters.forEach(charData => {
+                    const character = new Character(
+                        charData.x || 100,
+                        charData.y || 100,
+                        charData.emoji,
+                        charData.name,
+                        charData.type,
+                        charData.zombieType
+                    );
+                    
+                    if (charData.isZombie) character.becomeZombie();
+                    if (charData.isKiller) character.becomeKiller();
+                    if (charData.isCrazyKiller) character.becomeCrazyKiller();
+                    if (charData.hasCure) character.hasCure = true;
+                    
+                    gameState.characters.push(character);
+                });
+                
+                gameState.gameStarted = floorData.gameStarted || false;
+            }
+            
+            // Load characters that escaped from floor above
+            const escapedChars = JSON.parse(localStorage.getItem(`floor_${gameState.currentFloor}_characters`) || '[]');
+            if (escapedChars.length > 0) {
+                setTimeout(() => {
+                    escapedChars.forEach(charData => {
+                        const x = 100 + Math.random() * 200;
+                        const y = 100 + Math.random() * 150;
+                        
+                        const character = new Character(x, y, charData.emoji, charData.name, charData.type, charData.zombieType);
+                        
+                        if (charData.isZombie) character.becomeZombie();
+                        if (charData.isKiller) character.becomeKiller();
+                        if (charData.isCrazyKiller) character.becomeCrazyKiller();
+                        if (charData.hasCure) character.hasCure = true;
+                        
+                        gameState.characters.push(character);
+                    });
+                    
+                    // Clear the escaped characters list
+                    localStorage.removeItem(`floor_${gameState.currentFloor}_characters`);
+                    updateStats();
+                }, 10000); // 10 seconds delay
+            }
+        }
+
+        // Modal functions
+        function showModal(modalId) {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+        }
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // Statistics
+        function showSurvivorsModal() {
+            const content = document.getElementById('survivors-content');
+            content.innerHTML = `
+                <h4>Survivors</h4>
+                ${gameState.stats.survivors.map(s => `
+                    <div class="survivor-item">${s.name} - Floor ${s.floor} (${s.status})</div>
+                `).join('')}
+                
+                <h4>Doctors</h4>
+                ${gameState.stats.doctors.map(d => `
+                    <div class="survivor-item">${d.name} - ${d.status} - Success: ${d.success}</div>
+                `).join('')}
+                
+                <h4>Killers</h4>
+                ${gameState.stats.killers.map(k => `
+                    <div class="survivor-item ${k.isZombie ? 'killer-name' : ''}">
+                        ${k.name} - Zombies: ${k.zombiesKilled}, Humans: ${k.humansKilled}
+                    </div>
+                `).join('')}
+            `;
+            
+            showModal('survivors-modal');
+        }
+
+        function closeSurvivorsModal() {
+            closeModal();
+        }
+
+        // Save/Load functions
+        function saveGame() {
+            const saveData = {
+                currentFloor: gameState.currentFloor,
+                stats: gameState.stats,
+                floors: {}
+            };
+            
+            // Save all floor data
+            for (let floor = 10; floor <= 50; floor += 10) {
+                const floorData = localStorage.getItem(`floor_${floor}`);
+                if (floorData) {
+                    saveData.floors[floor] = JSON.parse(floorData);
+                }
+            }
+            
+            localStorage.setItem('zombieGameSave', JSON.stringify(saveData));
+            showNotification('Game saved!');
+        }
+
+        function loadGame() {
+            const saveData = JSON.parse(localStorage.getItem('zombieGameSave') || '{}');
+            
+            if (Object.keys(saveData).length === 0) {
+                showNotification('No save data found!');
+                return;
+            }
+            
+            // Load floor data
+            Object.entries(saveData.floors || {}).forEach(([floor, data]) => {
+                localStorage.setItem(`floor_${floor}`, JSON.stringify(data));
+            });
+            
+            gameState.stats = saveData.stats || { survivors: [], doctors: [], killers: [] };
+            
+            if (saveData.currentFloor) {
+                changeFloor(saveData.currentFloor - gameState.currentFloor);
+            }
+            
+            showNotification('Game loaded!');
+        }
+
+        // Initialize game on page load
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
