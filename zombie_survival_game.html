@@ -158,8 +158,11 @@
 
         .virus {
             position: absolute;
-            font-size: 16px;
+            font-size: 24px;
             z-index: 15;
+            background: rgba(255, 0, 0, 0.3);
+            border-radius: 50%;
+            padding: 2px;
         }
 
         .cure {
@@ -348,6 +351,7 @@
         <div class="bottom-controls">
             <button onclick="showAddCharacterModal()" id="add-character-btn">Add Character</button>
             <button onclick="startGame()" id="start-game-btn" style="display: none;">Start Game</button>
+            <button onclick="releaseVirus()" id="test-virus-btn" style="background: red;">Test Virus</button>
         </div>
     </div>
 
@@ -794,6 +798,8 @@
         }
 
         function startCharacterMovement() {
+            console.log('Starting character movement for', gameState.characters.length, 'characters');
+            
             // Start the movement loop for all characters
             function movementLoop() {
                 // Update all characters
@@ -801,7 +807,7 @@
                     char.update();
                 });
                 
-                // Update game objects
+                // Update game objects (including virus)
                 gameState.gameObjects.forEach(obj => {
                     obj.update();
                     if (obj instanceof Virus) {
@@ -818,36 +824,37 @@
                         const char2 = gameState.characters[j];
                         
                         if (char1.checkCollision(char2)) {
-                            // Bounce off each other
+                            // Simple bounce - just reverse velocities
+                            const tempVx = char1.vx;
+                            const tempVy = char1.vy;
+                            char1.vx = char2.vx;
+                            char1.vy = char2.vy;
+                            char2.vx = tempVx;
+                            char2.vy = tempVy;
+                            
+                            // Separate characters to prevent sticking
                             const dx = char1.x - char2.x;
                             const dy = char1.y - char2.y;
                             const distance = Math.sqrt(dx * dx + dy * dy);
-                            
                             if (distance > 0) {
                                 const normalX = dx / distance;
                                 const normalY = dy / distance;
-                                
-                                // Separate characters
                                 const overlap = 25 - distance;
                                 char1.x += normalX * overlap * 0.5;
                                 char1.y += normalY * overlap * 0.5;
                                 char2.x -= normalX * overlap * 0.5;
                                 char2.y -= normalY * overlap * 0.5;
-                                
-                                // Bounce velocities
-                                const relativeVelocityX = char1.vx - char2.vx;
-                                const relativeVelocityY = char1.vy - char2.vy;
-                                const speed = relativeVelocityX * normalX + relativeVelocityY * normalY;
-                                
-                                if (speed < 0) return; // Already separating
-                                
-                                char1.vx -= speed * normalX;
-                                char1.vy -= speed * normalY;
-                                char2.vx += speed * normalX;
-                                char2.vy += speed * normalY;
                             }
                         }
                     }
+                }
+                
+                // Check game interactions if game has started
+                if (gameState.gameStarted) {
+                    checkCharacterInteractions();
+                    checkLabInteractions();
+                    checkExitInteractions();
+                    checkWinConditions();
                 }
                 
                 requestAnimationFrame(movementLoop);
@@ -988,8 +995,7 @@
                 checkForZombieInfiltration();
             }, 1000);
             
-            // Start game loop
-            gameLoop();
+            // Game loop is already running via startCharacterMovement
         }
 
         function confirmStartGame() {
@@ -999,26 +1005,25 @@
 
         function releaseVirus() {
             const lab = document.getElementById('laboratory');
-            if (lab.style.display === 'none') return;
+            if (lab.style.display === 'none') {
+                console.log('Lab not visible, cannot release virus');
+                return;
+            }
             
             gameState.virusReleased = true;
             gameState.labOpen = true;
             
-            const labRect = lab.getBoundingClientRect();
+            // Position virus in the center of the game area for visibility
             const gameRect = document.querySelector('.game-area').getBoundingClientRect();
+            const x = 200; // Fixed position for testing
+            const y = 200; // Fixed position for testing
             
-            // Position virus at the lab opening
-            const labOpening = document.getElementById('lab-opening');
-            const openingRect = labOpening.getBoundingClientRect();
-            
-            const x = openingRect.left - gameRect.left + 10;
-            const y = openingRect.top - gameRect.top + 15;
-            
+            console.log('Creating virus at:', x, y);
             const virus = new Virus(x, y);
             gameState.gameObjects.push(virus);
             
-            console.log('Virus created at:', x, y);
-            showNotification('Virus released! Lab will reopen in 10 seconds...');
+            console.log('Virus created! Total game objects:', gameState.gameObjects.length);
+            showNotification('🦠 Virus released! Lab will reopen in 10 seconds...');
             
             // Close lab for 10 seconds
             gameState.labOpen = false;
@@ -1279,26 +1284,7 @@
             }
         }
 
-        function gameLoop() {
-            if (!gameState.gameStarted) return;
-            
-            // Update all physics objects
-            [...gameState.characters, ...gameState.gameObjects].forEach(obj => {
-                obj.update();
-                if (obj instanceof Virus) {
-                    obj.checkCollisionWithCharacters();
-                } else if (obj instanceof Cure) {
-                    obj.checkCollisionWithCharacters();
-                }
-            });
-            
-            checkCharacterInteractions();
-            checkLabInteractions();
-            checkExitInteractions();
-            checkWinConditions();
-            
-            requestAnimationFrame(gameLoop);
-        }
+        // Game loop is now handled by startCharacterMovement
 
         // Floor navigation
         function changeFloor(direction) {
