@@ -124,6 +124,25 @@
             font-size: 8px;
             color: white;
             font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .exit.closed {
+            background: #666;
+            border-color: #444;
+            opacity: 0.5;
+        }
+
+        .exit.open {
+            background: #00ff00;
+            border-color: #00aa00;
+            box-shadow: 0 0 10px #00ff00;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         .knife {
@@ -342,7 +361,7 @@
                 <div class="lab-opening" id="lab-opening"></div>
             </div>
             <div class="room">
-                <div class="exit" id="exit">Exit</div>
+                <div class="exit closed" id="exit">Exit</div>
                 <div class="knife" id="knife">🔪</div>
             </div>
             <div class="notification" id="notification"></div>
@@ -656,25 +675,28 @@
                 // Add to survivors list
                 gameState.stats.survivors.push({
                     name: this.name,
-                    floor: gameState.currentFloor - 10,
+                    floor: gameState.currentFloor - 1,
                     status: this.isZombie ? 'zombie' : (this.isKiller ? 'killer' : (this.type === 'doctor' ? 'doctor' : 'civilian'))
                 });
 
-                // Save character for next floor
-                const nextFloorData = {
-                    emoji: this.isZombie ? characterEmojis.zombie[this.zombieType] : this.emoji,
-                    name: this.name,
-                    type: this.type,
-                    zombieType: this.zombieType,
-                    isZombie: this.isZombie,
-                    isKiller: this.isKiller,
-                    isCrazyKiller: this.isCrazyKiller,
-                    hasCure: this.hasCure
-                };
-                
-                let nextFloorChars = JSON.parse(localStorage.getItem(`floor_${gameState.currentFloor - 10}_characters`) || '[]');
-                nextFloorChars.push(nextFloorData);
-                localStorage.setItem(`floor_${gameState.currentFloor - 10}_characters`, JSON.stringify(nextFloorChars));
+                // Save character for next floor (one floor below)
+                const nextFloor = gameState.currentFloor - 1;
+                if (nextFloor >= 1) {
+                    const nextFloorData = {
+                        emoji: this.isZombie ? characterEmojis.zombie[this.zombieType] : this.emoji,
+                        name: this.name,
+                        type: this.type,
+                        zombieType: this.zombieType,
+                        isZombie: this.isZombie,
+                        isKiller: this.isKiller,
+                        isCrazyKiller: this.isCrazyKiller,
+                        hasCure: this.hasCure
+                    };
+                    
+                    let nextFloorChars = JSON.parse(localStorage.getItem(`floor_${nextFloor}_characters`) || '[]');
+                    nextFloorChars.push(nextFloorData);
+                    localStorage.setItem(`floor_${nextFloor}_characters`, JSON.stringify(nextFloorChars));
+                }
 
                 this.element.remove();
                 const index = gameState.characters.indexOf(this);
@@ -851,7 +873,9 @@
                 
                 // Check game interactions if game has started
                 if (gameState.gameStarted) {
-                    checkCharacterInteractions();
+                    checkZombieInfections();
+                    checkCureInteractions();
+                    checkKillerInteractions();
                     checkLabInteractions();
                     checkExitInteractions();
                     checkWinConditions();
@@ -1039,11 +1063,16 @@
             const hasZombies = gameState.characters.some(c => c.isZombie);
             if (hasZombies && !gameState.exitOpen) {
                 gameState.exitOpen = true;
-                showNotification('Exit opened! 20 seconds to escape!');
+                const exitElement = document.getElementById('exit');
+                exitElement.classList.remove('closed');
+                exitElement.classList.add('open');
+                showNotification('🚪 Exit opened! 20 seconds to escape!');
                 
                 setTimeout(() => {
                     gameState.exitOpen = false;
-                    showNotification('Exit closed permanently!');
+                    exitElement.classList.remove('open');
+                    exitElement.classList.add('closed');
+                    showNotification('🚪 Exit closed permanently!');
                 }, 20000);
             }
             
@@ -1175,99 +1204,122 @@
             }
         }
 
-        function checkCharacterInteractions() {
+        function checkZombieInfections() {
             for (let i = 0; i < gameState.characters.length; i++) {
                 for (let j = i + 1; j < gameState.characters.length; j++) {
                     const char1 = gameState.characters[i];
                     const char2 = gameState.characters[j];
                     
                     if (char1.checkCollision(char2)) {
-                        handleCharacterCollision(char1, char2);
+                        // Zombie infection
+                        if (char1.isZombie && !char2.isZombie && !char2.isInfected) {
+                            char2.startInfection();
+                        } else if (char2.isZombie && !char1.isZombie && !char1.isInfected) {
+                            char1.startInfection();
+                        }
                     }
                 }
             }
         }
 
-        function handleCharacterCollision(char1, char2) {
-            // Zombie infection
-            if ((char1.isZombie && !char2.isZombie && !char2.isInfected) ||
-                (char2.isZombie && !char1.isZombie && !char1.isInfected)) {
-                const zombie = char1.isZombie ? char1 : char2;
-                const human = char1.isZombie ? char2 : char1;
-                human.startInfection();
-            }
-            
-            // Cure interactions
-            if ((char1.hasCure && char2.isZombie) || (char2.hasCure && char1.isZombie)) {
-                const curer = char1.hasCure ? char1 : char2;
-                const zombie = char1.hasCure ? char2 : char1;
-                
-                // Count nearby zombies
-                let nearbyZombies = 0;
-                for (let char of gameState.characters) {
-                    if (char.isZombie && curer.checkCollision(char)) {
-                        nearbyZombies++;
+        function checkCureInteractions() {
+            for (let i = 0; i < gameState.characters.length; i++) {
+                for (let j = i + 1; j < gameState.characters.length; j++) {
+                    const char1 = gameState.characters[i];
+                    const char2 = gameState.characters[j];
+                    
+                    if (char1.checkCollision(char2)) {
+                        // Cure interactions
+                        if (char1.hasCure && char2.isZombie) {
+                            handleCureInteraction(char1, char2);
+                        } else if (char2.hasCure && char1.isZombie) {
+                            handleCureInteraction(char2, char1);
+                        }
                     }
-                }
-                
-                if (nearbyZombies > 1) {
-                    // Curer becomes zombie
-                    curer.startInfection();
-                    curer.hasCure = false;
-                } else {
-                    // Cure the zombie
-                    zombie.becomeHuman();
-                    curer.hasCure = false;
                 }
             }
-            
-            // Killer interactions
-            if (char1.isKiller || char2.isKiller) {
-                const killer = char1.isKiller ? char1 : char2;
-                const target = char1.isKiller ? char2 : char1;
-                
-                // Count nearby zombies attacking killer
-                let zombiesAttacking = 0;
-                for (let char of gameState.characters) {
-                    if (char.isZombie && killer.checkCollision(char)) {
-                        zombiesAttacking++;
+        }
+
+        function checkKillerInteractions() {
+            for (let i = 0; i < gameState.characters.length; i++) {
+                for (let j = i + 1; j < gameState.characters.length; j++) {
+                    const char1 = gameState.characters[i];
+                    const char2 = gameState.characters[j];
+                    
+                    if (char1.checkCollision(char2)) {
+                        // Killer interactions
+                        if (char1.isKiller && !char2.isKiller) {
+                            handleKillerInteraction(char1, char2);
+                        } else if (char2.isKiller && !char1.isKiller) {
+                            handleKillerInteraction(char2, char1);
+                        }
                     }
                 }
+            }
+        }
+
+        function handleCureInteraction(curer, zombie) {
+            // Count nearby zombies
+            let nearbyZombies = 0;
+            for (let char of gameState.characters) {
+                if (char.isZombie && curer.checkCollision(char)) {
+                    nearbyZombies++;
+                }
+            }
+            
+            if (nearbyZombies > 1) {
+                // Curer becomes zombie if more than one zombie attacks
+                curer.startInfection();
+                curer.hasCure = false;
+            } else {
+                // Cure the zombie
+                zombie.becomeHuman();
+                curer.hasCure = false;
+            }
+        }
+
+        function handleKillerInteraction(killer, target) {
+            // Count nearby zombies attacking killer
+            let zombiesAttacking = 0;
+            for (let char of gameState.characters) {
+                if (char.isZombie && killer.checkCollision(char)) {
+                    zombiesAttacking++;
+                }
+            }
+            
+            if (zombiesAttacking >= 2) {
+                // Killer becomes zombie
+                killer.startInfection();
+                killer.dropKnife();
+            } else {
+                // Check if killer can kill target
+                let canKill = false;
                 
-                if (zombiesAttacking >= 2) {
-                    // Killer becomes zombie
-                    killer.startInfection();
-                    killer.dropKnife();
-                } else {
-                    // Killer kills target
-                    let canKill = false;
-                    
-                    if (target.isZombie || target.isInfected) {
-                        canKill = true;
-                    } else if (target.type === 'doctor') {
-                        canKill = true;
-                        if (!killer.isCrazyKiller) {
-                            killer.becomeCrazyKiller();
+                if (target.isZombie || target.isInfected) {
+                    canKill = true;
+                } else if (target.type === 'doctor') {
+                    canKill = true;
+                    if (!killer.isCrazyKiller) {
+                        killer.becomeCrazyKiller();
+                    }
+                } else if (killer.isCrazyKiller) {
+                    canKill = true;
+                } else if (target.isKiller) {
+                    canKill = true;
+                }
+                
+                if (canKill) {
+                    // Update killer stats
+                    const killerStat = gameState.stats.killers.find(k => k.name === killer.name);
+                    if (killerStat) {
+                        if (target.isZombie) {
+                            killerStat.zombiesKilled++;
+                        } else {
+                            killerStat.humansKilled++;
                         }
-                    } else if (killer.isCrazyKiller) {
-                        canKill = true;
-                    } else if (target.isKiller) {
-                        canKill = true;
                     }
                     
-                    if (canKill) {
-                        // Update killer stats
-                        const killerStat = gameState.stats.killers.find(k => k.name === killer.name);
-                        if (killerStat) {
-                            if (target.isZombie) {
-                                killerStat.zombiesKilled++;
-                            } else {
-                                killerStat.humansKilled++;
-                            }
-                        }
-                        
-                        target.kill();
-                    }
+                    target.kill();
                 }
             }
         }
