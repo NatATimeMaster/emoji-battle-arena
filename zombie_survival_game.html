@@ -161,6 +161,19 @@
             animation: pulse 1s infinite;
         }
 
+        .exit-countdown {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            color: red;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
@@ -411,7 +424,10 @@
                 <div class="lab-opening" id="lab-opening"></div>
             </div>
             <div class="room">
-                <div class="exit closed" id="exit">Exit</div>
+                <div class="exit closed" id="exit">
+                    Exit
+                    <div class="exit-countdown" id="exit-countdown" style="display: none;">20</div>
+                </div>
                 <div class="knife" id="knife">🔪</div>
             </div>
             <div class="notification" id="notification"></div>
@@ -610,7 +626,7 @@
                 const dx = this.x - other.x;
                 const dy = this.y - other.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                return distance < 25;
+                return distance < 35; // Increased collision distance
             }
         }
 
@@ -980,6 +996,9 @@
                     checkLabInteractions();
                     checkExitInteractions();
                     checkWinConditions();
+                } else {
+                    // Still check zombie infections even before game starts
+                    checkZombieInfections();
                 }
                 
                 requestAnimationFrame(movementLoop);
@@ -1180,13 +1199,46 @@
                 console.log('First zombie detected! Exit will open in 20 seconds...');
                 showNotification('⚠️ Zombie detected! Exit opening in 20 seconds...');
                 
+                // Start countdown
+                const countdownElement = document.getElementById('exit-countdown');
+                countdownElement.style.display = 'block';
+                let countdown = 20;
+                countdownElement.textContent = countdown;
+                
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    countdownElement.textContent = countdown;
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        countdownElement.style.display = 'none';
+                    }
+                }, 1000);
+                
                 setTimeout(() => {
                     gameState.exitOpen = true;
                     const exitElement = document.getElementById('exit');
                     exitElement.classList.remove('closed');
                     exitElement.classList.add('open');
                     sounds.exitOpen();
-                    showNotification('🚪 Exit opened! 20 seconds to escape!');
+                    showNotification('✅ The exit has been opened!');
+                    
+                    // Start closing countdown
+                    countdownElement.style.display = 'block';
+                    countdownElement.style.color = 'green';
+                    let closeCountdown = 20;
+                    countdownElement.textContent = closeCountdown;
+                    
+                    const closeCountdownInterval = setInterval(() => {
+                        closeCountdown--;
+                        countdownElement.textContent = closeCountdown;
+                        if (closeCountdown <= 5) {
+                            countdownElement.style.color = 'red';
+                        }
+                        if (closeCountdown <= 0) {
+                            clearInterval(closeCountdownInterval);
+                            countdownElement.style.display = 'none';
+                        }
+                    }, 1000);
                     
                     setTimeout(() => {
                         gameState.exitOpen = false;
@@ -1333,20 +1385,21 @@
         }
 
         function checkZombieInfections() {
-            for (let i = 0; i < gameState.characters.length; i++) {
-                for (let j = i + 1; j < gameState.characters.length; j++) {
-                    const char1 = gameState.characters[i];
-                    const char2 = gameState.characters[j];
+            // Check every zombie against every non-zombie
+            const zombies = gameState.characters.filter(c => c.isZombie);
+            const humans = gameState.characters.filter(c => !c.isZombie && !c.isInfected);
+            
+            for (let zombie of zombies) {
+                for (let human of humans) {
+                    const dx = zombie.x - human.x;
+                    const dy = zombie.y - human.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    if (char1.checkCollision(char2)) {
-                        // Zombie infection - any zombie touching any non-zombie
-                        if (char1.isZombie && !char2.isZombie && !char2.isInfected) {
-                            console.log(`${char1.name} (zombie) infected ${char2.name}`);
-                            char2.startInfection();
-                        } else if (char2.isZombie && !char1.isZombie && !char1.isInfected) {
-                            console.log(`${char2.name} (zombie) infected ${char1.name}`);
-                            char1.startInfection();
-                        }
+                    if (distance < 40) { // Direct distance check
+                        console.log(`INFECTION: ${zombie.name} (zombie) infected ${human.name} at distance ${distance.toFixed(1)}`);
+                        human.startInfection();
+                        showNotification(`🦠 ${human.name} got infected by ${zombie.name}!`);
+                        break; // One infection per frame per zombie
                     }
                 }
             }
