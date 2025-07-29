@@ -392,6 +392,7 @@
             <button onclick="showAddCharacterModal()" id="add-character-btn">Add Character</button>
             <button onclick="startGame()" id="start-game-btn" style="display: none;">Start Game</button>
             <button onclick="releaseVirus()" id="test-virus-btn" style="background: red;">Test Virus</button>
+            <button onclick="makeFirstZombie()" id="test-zombie-btn" style="background: purple;">Make Zombie</button>
         </div>
     </div>
 
@@ -446,6 +447,7 @@
             },
             timers: {},
             exitOpen: false,
+            exitOpeningScheduled: false,
             labOpen: true,
             virusReleased: false,
             cureInProgress: false,
@@ -610,6 +612,15 @@
             becomeZombie() {
                 if (this.isZombie) return;
                 
+                // Update doctor stats if this is a doctor
+                if (this.type === 'doctor') {
+                    const doctorStat = gameState.stats.doctors.find(d => d.name === this.name);
+                    if (doctorStat) {
+                        doctorStat.status = 'zombie';
+                        doctorStat.success = 'failed';
+                    }
+                }
+                
                 this.isZombie = true;
                 this.isInfected = false;
                 this.element.innerHTML = `
@@ -687,6 +698,14 @@
 
             kill(killerName = null) {
                 sounds.kill();
+                
+                // Update doctor stats if this is a doctor
+                if (this.type === 'doctor') {
+                    const doctorStat = gameState.stats.doctors.find(d => d.name === this.name);
+                    if (doctorStat && doctorStat.success === 'none') {
+                        doctorStat.success = 'failed';
+                    }
+                }
                 
                 // Track death
                 gameState.stats.deaths.push({
@@ -1055,10 +1074,8 @@
                 releaseVirus();
             }, 10000);
             
-            // Open exit after 20 seconds of zombie infiltration
-            setTimeout(() => {
-                checkForZombieInfiltration();
-            }, 1000);
+            // Start checking for zombie infiltration immediately
+            checkForZombieInfiltration();
             
             // Game loop is already running via startCharacterMovement
         }
@@ -1107,23 +1124,36 @@
         }
 
         function checkForZombieInfiltration() {
-            if (!gameState.gameStarted) return;
+            if (!gameState.gameStarted) {
+                setTimeout(() => {
+                    checkForZombieInfiltration();
+                }, 1000);
+                return;
+            }
             
-            const hasZombies = gameState.characters.some(c => c.isZombie);
-            if (hasZombies && !gameState.exitOpen) {
-                gameState.exitOpen = true;
-                const exitElement = document.getElementById('exit');
-                exitElement.classList.remove('closed');
-                exitElement.classList.add('open');
-                sounds.exitOpen();
-                showNotification('🚪 Exit opened! 20 seconds to escape!');
+            const zombies = gameState.characters.filter(c => c.isZombie);
+            console.log(`Checking for zombies: ${zombies.length} found`);
+            
+            if (zombies.length > 0 && !gameState.exitOpen && !gameState.exitOpeningScheduled) {
+                gameState.exitOpeningScheduled = true;
+                console.log('First zombie detected! Exit will open in 20 seconds...');
+                showNotification('⚠️ Zombie detected! Exit opening in 20 seconds...');
                 
                 setTimeout(() => {
-                    gameState.exitOpen = false;
-                    exitElement.classList.remove('open');
-                    exitElement.classList.add('closed');
-                    sounds.exitClose();
-                    showNotification('🚪 Exit closed permanently!');
+                    gameState.exitOpen = true;
+                    const exitElement = document.getElementById('exit');
+                    exitElement.classList.remove('closed');
+                    exitElement.classList.add('open');
+                    sounds.exitOpen();
+                    showNotification('🚪 Exit opened! 20 seconds to escape!');
+                    
+                    setTimeout(() => {
+                        gameState.exitOpen = false;
+                        exitElement.classList.remove('open');
+                        exitElement.classList.add('closed');
+                        sounds.exitClose();
+                        showNotification('🚪 Exit closed permanently!');
+                    }, 20000);
                 }, 20000);
             }
             
@@ -1210,10 +1240,16 @@
                         gameState.cureInProgress = false;
                         sounds.cureComplete();
                         
-                        // Give cure to a doctor in lab
+                        // Give cure to a doctor in lab and mark as successful
                         for (let character of gameState.characters) {
                             if (character.inLab && character.type === 'doctor' && !character.isZombie) {
                                 character.hasCure = true;
+                                
+                                // Mark doctor as successful
+                                const doctorStat = gameState.stats.doctors.find(d => d.name === character.name);
+                                if (doctorStat) {
+                                    doctorStat.success = 'succeeded';
+                                }
                                 break;
                             }
                         }
@@ -1262,10 +1298,12 @@
                     const char2 = gameState.characters[j];
                     
                     if (char1.checkCollision(char2)) {
-                        // Zombie infection
+                        // Zombie infection - any zombie touching any non-zombie
                         if (char1.isZombie && !char2.isZombie && !char2.isInfected) {
+                            console.log(`${char1.name} (zombie) infected ${char2.name}`);
                             char2.startInfection();
                         } else if (char2.isZombie && !char1.isZombie && !char1.isInfected) {
+                            console.log(`${char2.name} (zombie) infected ${char1.name}`);
                             char1.startInfection();
                         }
                     }
@@ -1520,7 +1558,7 @@
                 <h4>Doctors</h4>
                 ${gameState.stats.doctors.length > 0 ? 
                     gameState.stats.doctors.map(d => `
-                        <div class="survivor-item">${d.name} - ${d.status} - Success: ${d.success}</div>
+                        <div class="survivor-item">${d.name} - Status: ${d.status} - ${d.success === 'succeeded' ? '✅ Succeeded' : d.success === 'failed' ? '❌ Failed' : '⏳ In Progress'}</div>
                     `).join('') : '<div class="survivor-item">No doctors yet</div>'
                 }
                 
@@ -1591,6 +1629,18 @@
             }
             
             showNotification('Game loaded!');
+        }
+
+        // Test function to make first character a zombie
+        function makeFirstZombie() {
+            if (gameState.characters.length > 0) {
+                const firstChar = gameState.characters[0];
+                if (!firstChar.isZombie) {
+                    firstChar.becomeZombie();
+                    console.log(`Made ${firstChar.name} a zombie for testing`);
+                    showNotification(`🧟 ${firstChar.name} became a zombie!`);
+                }
+            }
         }
 
         // Initialize game on page load
