@@ -679,7 +679,10 @@
                 document.querySelector('.game-area').appendChild(element);
                 
                 super(x, y, element);
-                this.speed = 0.5;
+                this.speed = 1.5;
+                // Give it initial velocity to move out of lab
+                this.vx = 2;
+                this.vy = 1;
             }
 
             checkCollisionWithCharacters() {
@@ -960,8 +963,12 @@
             // Close lab initially
             gameState.labOpen = false;
             
+            console.log('Game started! Virus will be released in 10 seconds...');
+            showNotification('Game started! Virus will be released in 10 seconds...');
+            
             // Release virus after 10 seconds
             setTimeout(() => {
+                console.log('Releasing virus now...');
                 releaseVirus();
             }, 10000);
             
@@ -980,21 +987,26 @@
         }
 
         function releaseVirus() {
-            if (!document.getElementById('laboratory').style.display === 'block') return;
+            const lab = document.getElementById('laboratory');
+            if (lab.style.display === 'none') return;
             
             gameState.virusReleased = true;
             gameState.labOpen = true;
             
-            const lab = document.getElementById('laboratory');
             const labRect = lab.getBoundingClientRect();
             const gameRect = document.querySelector('.game-area').getBoundingClientRect();
             
-            const x = labRect.left - gameRect.left + 40;
-            const y = labRect.bottom - gameRect.top;
+            // Position virus at the lab opening
+            const labOpening = document.getElementById('lab-opening');
+            const openingRect = labOpening.getBoundingClientRect();
+            
+            const x = openingRect.left - gameRect.left + 10;
+            const y = openingRect.top - gameRect.top + 15;
             
             const virus = new Virus(x, y);
             gameState.gameObjects.push(virus);
             
+            console.log('Virus created at:', x, y);
             showNotification('Virus released! Lab will reopen in 10 seconds...');
             
             // Close lab for 10 seconds
