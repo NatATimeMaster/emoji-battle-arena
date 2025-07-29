@@ -86,6 +86,27 @@
             font-size: 10px;
             color: black;
             font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .laboratory.closed {
+            background: #ff4444;
+            border-color: #cc0000;
+            color: white;
+            opacity: 0.7;
+        }
+
+        .laboratory.open {
+            background: #00ff00;
+            border-color: #00aa00;
+            color: black;
+            box-shadow: 0 0 15px #00ff00;
+            animation: labPulse 2s infinite;
+        }
+
+        @keyframes labPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 15px #00ff00; }
+            50% { transform: scale(1.05); box-shadow: 0 0 25px #00ff00; }
         }
 
         .lab-label {
@@ -355,7 +376,7 @@
         </div>
 
         <div class="game-area">
-            <div class="laboratory" id="laboratory" style="display: none;">
+            <div class="laboratory open" id="laboratory" style="display: none;">
                 <div class="lab-label">Laboratory</div>
                 LAB
                 <div class="lab-opening" id="lab-opening"></div>
@@ -420,7 +441,8 @@
             stats: {
                 survivors: [],
                 doctors: [],
-                killers: []
+                killers: [],
+                deaths: []
             },
             timers: {},
             exitOpen: false,
@@ -466,7 +488,11 @@
             cure: () => playSound(400, 0.3),
             exit: () => playSound(300, 0.2),
             cureComplete: () => playSound(500, 0.5),
-            transform: () => playSound(100, 0.3)
+            transform: () => playSound(100, 0.3),
+            labOpen: () => playSound(600, 0.4),
+            labClose: () => playSound(250, 0.4),
+            exitOpen: () => playSound(700, 0.6),
+            exitClose: () => playSound(200, 0.6)
         };
 
         function playSound(frequency, duration) {
@@ -659,8 +685,23 @@
                 createCure(this.x, this.y);
             }
 
-            kill() {
+            kill(killerName = null) {
                 sounds.kill();
+                
+                // Track death
+                gameState.stats.deaths.push({
+                    name: this.name,
+                    type: this.type,
+                    status: this.isZombie ? 'zombie' : (this.isKiller ? 'killer' : 'human'),
+                    killedBy: killerName,
+                    floor: gameState.currentFloor
+                });
+                
+                // Show kill notification
+                if (killerName) {
+                    showNotification(`💀 ${killerName} killed ${this.name}!`);
+                }
+                
                 this.element.remove();
                 const index = gameState.characters.indexOf(this);
                 if (index > -1) {
@@ -1049,11 +1090,19 @@
             console.log('Virus created! Total game objects:', gameState.gameObjects.length);
             showNotification('🦠 Virus released! Lab will reopen in 10 seconds...');
             
-            // Close lab for 10 seconds
+            // Close lab for 10 seconds with visual feedback
             gameState.labOpen = false;
+            const labElement = document.getElementById('laboratory');
+            labElement.classList.remove('open');
+            labElement.classList.add('closed');
+            sounds.labClose();
+            
             setTimeout(() => {
                 gameState.labOpen = true;
-                showNotification('The lab has been cleared!');
+                labElement.classList.remove('closed');
+                labElement.classList.add('open');
+                sounds.labOpen();
+                showNotification('🔬 The lab has been cleared!');
             }, 10000);
         }
 
@@ -1066,12 +1115,14 @@
                 const exitElement = document.getElementById('exit');
                 exitElement.classList.remove('closed');
                 exitElement.classList.add('open');
+                sounds.exitOpen();
                 showNotification('🚪 Exit opened! 20 seconds to escape!');
                 
                 setTimeout(() => {
                     gameState.exitOpen = false;
                     exitElement.classList.remove('open');
                     exitElement.classList.add('closed');
+                    sounds.exitClose();
                     showNotification('🚪 Exit closed permanently!');
                 }, 20000);
             }
@@ -1319,7 +1370,7 @@
                         }
                     }
                     
-                    target.kill();
+                    target.kill(killer.name);
                 }
             }
         }
@@ -1460,21 +1511,37 @@
             const content = document.getElementById('survivors-content');
             content.innerHTML = `
                 <h4>Survivors</h4>
-                ${gameState.stats.survivors.map(s => `
-                    <div class="survivor-item">${s.name} - Floor ${s.floor} (${s.status})</div>
-                `).join('')}
+                ${gameState.stats.survivors.length > 0 ? 
+                    gameState.stats.survivors.map(s => `
+                        <div class="survivor-item">${s.name} - Floor ${s.floor} (${s.status})</div>
+                    `).join('') : '<div class="survivor-item">No survivors yet</div>'
+                }
                 
                 <h4>Doctors</h4>
-                ${gameState.stats.doctors.map(d => `
-                    <div class="survivor-item">${d.name} - ${d.status} - Success: ${d.success}</div>
-                `).join('')}
+                ${gameState.stats.doctors.length > 0 ? 
+                    gameState.stats.doctors.map(d => `
+                        <div class="survivor-item">${d.name} - ${d.status} - Success: ${d.success}</div>
+                    `).join('') : '<div class="survivor-item">No doctors yet</div>'
+                }
                 
                 <h4>Killers</h4>
-                ${gameState.stats.killers.map(k => `
-                    <div class="survivor-item ${k.isZombie ? 'killer-name' : ''}">
-                        ${k.name} - Zombies: ${k.zombiesKilled}, Humans: ${k.humansKilled}
-                    </div>
-                `).join('')}
+                ${gameState.stats.killers.length > 0 ? 
+                    gameState.stats.killers.map(k => `
+                        <div class="survivor-item ${k.isZombie ? 'killer-name' : ''}">
+                            ${k.name} - Zombies: ${k.zombiesKilled}, Humans: ${k.humansKilled}
+                        </div>
+                    `).join('') : '<div class="survivor-item">No killers yet</div>'
+                }
+                
+                <h4>Deaths</h4>
+                ${gameState.stats.deaths.length > 0 ? 
+                    gameState.stats.deaths.map(d => `
+                        <div class="survivor-item" style="color: #ff6666;">
+                            💀 ${d.name} (${d.type}, ${d.status}) - Floor ${d.floor}
+                            ${d.killedBy ? ` - Killed by ${d.killedBy}` : ''}
+                        </div>
+                    `).join('') : '<div class="survivor-item">No deaths yet</div>'
+                }
             `;
             
             showModal('survivors-modal');
@@ -1517,7 +1584,7 @@
                 localStorage.setItem(`floor_${floor}`, JSON.stringify(data));
             });
             
-            gameState.stats = saveData.stats || { survivors: [], doctors: [], killers: [] };
+            gameState.stats = saveData.stats || { survivors: [], doctors: [], killers: [], deaths: [] };
             
             if (saveData.currentFloor) {
                 changeFloor(saveData.currentFloor - gameState.currentFloor);
