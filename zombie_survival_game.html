@@ -779,6 +779,69 @@
             });
         }
 
+        function startCharacterMovement() {
+            // Start the movement loop for all characters
+            function movementLoop() {
+                // Update all characters
+                gameState.characters.forEach(char => {
+                    char.update();
+                });
+                
+                // Update game objects
+                gameState.gameObjects.forEach(obj => {
+                    obj.update();
+                    if (obj instanceof Virus) {
+                        obj.checkCollisionWithCharacters();
+                    } else if (obj instanceof Cure) {
+                        obj.checkCollisionWithCharacters();
+                    }
+                });
+                
+                // Check character collisions (bouncing off each other)
+                for (let i = 0; i < gameState.characters.length; i++) {
+                    for (let j = i + 1; j < gameState.characters.length; j++) {
+                        const char1 = gameState.characters[i];
+                        const char2 = gameState.characters[j];
+                        
+                        if (char1.checkCollision(char2)) {
+                            // Bounce off each other
+                            const dx = char1.x - char2.x;
+                            const dy = char1.y - char2.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance > 0) {
+                                const normalX = dx / distance;
+                                const normalY = dy / distance;
+                                
+                                // Separate characters
+                                const overlap = 25 - distance;
+                                char1.x += normalX * overlap * 0.5;
+                                char1.y += normalY * overlap * 0.5;
+                                char2.x -= normalX * overlap * 0.5;
+                                char2.y -= normalY * overlap * 0.5;
+                                
+                                // Bounce velocities
+                                const relativeVelocityX = char1.vx - char2.vx;
+                                const relativeVelocityY = char1.vy - char2.vy;
+                                const speed = relativeVelocityX * normalX + relativeVelocityY * normalY;
+                                
+                                if (speed < 0) return; // Already separating
+                                
+                                char1.vx -= speed * normalX;
+                                char1.vy -= speed * normalY;
+                                char2.vx += speed * normalX;
+                                char2.vy += speed * normalY;
+                            }
+                        }
+                    }
+                }
+                
+                requestAnimationFrame(movementLoop);
+            }
+            
+            movementLoop();
+        }
+
         function updateFloorDisplay() {
             document.getElementById('current-floor').textContent = gameState.currentFloor;
             
@@ -972,9 +1035,16 @@
             const lab = document.getElementById('laboratory');
             if (lab.style.display === 'none') return;
             
-            const labRect = lab.getBoundingClientRect();
+            const labOpening = document.getElementById('lab-opening');
+            const openingRect = labOpening.getBoundingClientRect();
             const gameRect = document.querySelector('.game-area').getBoundingClientRect();
             
+            const openingX = openingRect.left - gameRect.left;
+            const openingY = openingRect.top - gameRect.top;
+            const openingWidth = openingRect.width;
+            const openingHeight = openingRect.height;
+            
+            const labRect = lab.getBoundingClientRect();
             const labX = labRect.left - gameRect.left;
             const labY = labRect.top - gameRect.top;
             const labWidth = labRect.width;
@@ -985,11 +1055,23 @@
             let zombiesInLab = 0;
             
             for (let character of gameState.characters) {
+                // Check if character can enter lab through the opening
+                const nearOpening = character.x >= openingX && character.x <= openingX + openingWidth &&
+                                  character.y >= openingY && character.y <= openingY + openingHeight;
+                
                 const inLab = character.x >= labX && character.x <= labX + labWidth &&
                             character.y >= labY && character.y <= labY + labHeight;
                 
-                if (inLab) {
+                if (nearOpening && character.vx < 0) {
+                    // Character is moving towards lab opening, allow entry
                     character.inLab = true;
+                } else if (inLab) {
+                    character.inLab = true;
+                } else {
+                    character.inLab = false;
+                }
+                
+                if (character.inLab) {
                     if (character.type === 'doctor' && !character.isZombie) {
                         doctorsInLab++;
                     } else if (character.type === 'civilian' && !character.isZombie) {
@@ -997,8 +1079,6 @@
                     } else if (character.isZombie) {
                         zombiesInLab++;
                     }
-                } else {
-                    character.inLab = false;
                 }
             }
             
@@ -1352,7 +1432,7 @@
             };
             
             // Save all floor data
-            for (let floor = 10; floor <= 50; floor += 10) {
+            for (let floor = 1; floor <= 50; floor++) {
                 const floorData = localStorage.getItem(`floor_${floor}`);
                 if (floorData) {
                     saveData.floors[floor] = JSON.parse(floorData);
