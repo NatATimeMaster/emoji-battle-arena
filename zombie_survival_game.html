@@ -308,6 +308,27 @@
             display: none;
         }
 
+        .lockdown-notification {
+            background: rgba(0,0,0,0.95) !important;
+            color: #ff0000 !important;
+            font-family: 'Courier New', monospace !important;
+            font-size: 28px !important;
+            border: 3px solid #ff0000 !important;
+            box-shadow: 0 0 30px #ff0000 !important;
+            animation: lockdownFlash 0.5s infinite !important;
+        }
+
+        @keyframes lockdownFlash {
+            0%, 100% { 
+                background: rgba(0,0,0,0.95);
+                color: #ff0000;
+            }
+            50% { 
+                background: rgba(50,0,0,0.95);
+                color: #ffffff;
+            }
+        }
+
         .blinking {
             animation: blink 0.5s infinite;
         }
@@ -401,6 +422,7 @@
             <button onclick="startGame()" id="start-game-btn" style="display: none;">Start Game</button>
             <button onclick="releaseVirus()" id="test-virus-btn" style="background: red;">Test Virus</button>
             <button onclick="makeFirstZombie()" id="test-zombie-btn" style="background: purple;">Make Zombie</button>
+            <button onclick="resetGame()" id="reset-btn" style="background: orange;">Reset Game</button>
         </div>
     </div>
 
@@ -1171,7 +1193,7 @@
                         exitElement.classList.remove('open');
                         exitElement.classList.add('closed');
                         sounds.exitClose();
-                        showNotification('🚪 Exit closed permanently!');
+                        showNotification('🔒 LOCKDOWN 🔒', true);
                     }, 20000);
                 }, 20000);
             }
@@ -1553,14 +1575,23 @@
             });
         }
 
-        function showNotification(message) {
+        function showNotification(message, isLockdown = false) {
             const notification = document.getElementById('notification');
             notification.textContent = message;
             notification.style.display = 'block';
             
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
+            if (isLockdown) {
+                notification.classList.add('lockdown-notification');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                    notification.classList.remove('lockdown-notification');
+                }, 5000); // Longer duration for lockdown
+            } else {
+                notification.classList.remove('lockdown-notification');
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 3000);
+            }
         }
 
         // Statistics
@@ -1662,6 +1693,69 @@
                     console.log(`Made ${firstChar.name} a zombie for testing`);
                     showNotification(`🧟 ${firstChar.name} became a zombie!`);
                 }
+            }
+        }
+
+        // Reset game to initial state
+        function resetGame() {
+            if (confirm('Are you sure you want to reset the entire game? This will clear all progress!')) {
+                // Clear all localStorage data
+                for (let floor = 1; floor <= 50; floor++) {
+                    localStorage.removeItem(`floor_${floor}`);
+                    localStorage.removeItem(`floor_${floor}_characters`);
+                }
+                localStorage.removeItem('zombieGameSave');
+                
+                // Reset game state
+                gameState = {
+                    currentFloor: 50,
+                    gameStarted: false,
+                    characters: [],
+                    gameObjects: [],
+                    stats: {
+                        survivors: [],
+                        doctors: [],
+                        killers: [],
+                        deaths: []
+                    },
+                    timers: {},
+                    exitOpen: false,
+                    exitOpeningScheduled: false,
+                    labOpen: true,
+                    virusReleased: false,
+                    cureInProgress: false,
+                    cureTimer: 0,
+                    requiredCureTime: 0
+                };
+                
+                // Clear all characters from screen
+                document.querySelectorAll('.character').forEach(char => char.remove());
+                document.querySelectorAll('.virus').forEach(virus => virus.remove());
+                document.querySelectorAll('.cure').forEach(cure => cure.remove());
+                
+                // Reset UI elements
+                document.getElementById('add-character-btn').style.display = 'block';
+                document.getElementById('start-game-btn').style.display = 'none';
+                
+                // Reset lab and exit states
+                const lab = document.getElementById('laboratory');
+                lab.classList.remove('closed');
+                lab.classList.add('open');
+                
+                const exit = document.getElementById('exit');
+                exit.classList.remove('open');
+                exit.classList.add('closed');
+                
+                // Reset knife
+                const knife = document.getElementById('knife');
+                knife.style.display = 'block';
+                knife.style.left = '';
+                knife.style.top = '';
+                
+                // Reinitialize game
+                initGame();
+                
+                showNotification('🔄 Game reset to initial state!');
             }
         }
 
