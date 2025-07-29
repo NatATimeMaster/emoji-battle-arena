@@ -308,27 +308,32 @@
 
         .notification {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255,255,255,0.9);
-            color: black;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 18px;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
             font-weight: bold;
             z-index: 100;
             display: none;
+            max-width: 250px;
+            border: 1px solid #666;
         }
 
         .lockdown-notification {
             background: rgba(0,0,0,0.95) !important;
             color: #ff0000 !important;
             font-family: 'Courier New', monospace !important;
-            font-size: 28px !important;
-            border: 3px solid #ff0000 !important;
-            box-shadow: 0 0 30px #ff0000 !important;
+            font-size: 18px !important;
+            border: 2px solid #ff0000 !important;
+            box-shadow: 0 0 15px #ff0000 !important;
             animation: lockdownFlash 0.5s infinite !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            right: auto !important;
         }
 
         @keyframes lockdownFlash {
@@ -438,6 +443,7 @@
             <button onclick="startGame()" id="start-game-btn" style="display: none;">Start Game</button>
             <button onclick="releaseVirus()" id="test-virus-btn" style="background: red;">Test Virus</button>
             <button onclick="makeFirstZombie()" id="test-zombie-btn" style="background: purple;">Make Zombie</button>
+            <button onclick="forceExitOpen()" id="test-exit-btn" style="background: blue;">Test Exit</button>
             <button onclick="resetGame()" id="reset-btn" style="background: orange;">Reset Game</button>
         </div>
     </div>
@@ -1192,7 +1198,9 @@
             }
             
             const zombies = gameState.characters.filter(c => c.isZombie);
-            console.log(`Checking for zombies: ${zombies.length} found`);
+            if (zombies.length > 0) {
+                console.log(`Checking for zombies: ${zombies.length} found, exitOpen: ${gameState.exitOpen}, exitOpeningScheduled: ${gameState.exitOpeningScheduled}`);
+            }
             
             if (zombies.length > 0 && !gameState.exitOpen && !gameState.exitOpeningScheduled) {
                 gameState.exitOpeningScheduled = true;
@@ -1462,20 +1470,28 @@
         }
 
         function handleKillerInteraction(killer, target) {
-            // Count nearby zombies attacking killer
+            // Count nearby zombies attacking killer (distance based)
             let zombiesAttacking = 0;
             for (let char of gameState.characters) {
-                if (char.isZombie && killer.checkCollision(char)) {
-                    zombiesAttacking++;
+                if (char.isZombie && char !== target) {
+                    const dx = killer.x - char.x;
+                    const dy = killer.y - char.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 40) {
+                        zombiesAttacking++;
+                    }
                 }
             }
             
-            if (zombiesAttacking >= 2) {
-                // Killer becomes zombie
+            console.log(`Killer ${killer.name} vs ${target.name}, zombies attacking: ${zombiesAttacking}`);
+            
+            if (target.isZombie && zombiesAttacking >= 2) {
+                // Killer becomes zombie if attacked by 2+ zombies
+                console.log(`${killer.name} overwhelmed by ${zombiesAttacking} zombies!`);
                 killer.startInfection();
                 killer.dropKnife();
             } else {
-                // Check if killer can kill target
+                // Killer can kill target
                 let canKill = false;
                 
                 if (target.isZombie || target.isInfected) {
@@ -1492,6 +1508,7 @@
                 }
                 
                 if (canKill) {
+                    console.log(`${killer.name} killing ${target.name}`);
                     // Update killer stats
                     const killerStat = gameState.stats.killers.find(k => k.name === killer.name);
                     if (killerStat) {
@@ -1746,6 +1763,66 @@
                     console.log(`Made ${firstChar.name} a zombie for testing`);
                     showNotification(`🧟 ${firstChar.name} became a zombie!`);
                 }
+            }
+        }
+
+        // Test function to force exit opening
+        function forceExitOpen() {
+            if (!gameState.exitOpeningScheduled) {
+                gameState.exitOpeningScheduled = true;
+                console.log('Forcing exit opening sequence...');
+                showNotification('🔧 Testing exit opening...');
+                
+                // Start countdown
+                const countdownElement = document.getElementById('exit-countdown');
+                countdownElement.style.display = 'block';
+                countdownElement.style.color = 'red';
+                let countdown = 5; // Shorter for testing
+                countdownElement.textContent = countdown;
+                
+                const countdownInterval = setInterval(() => {
+                    countdown--;
+                    countdownElement.textContent = countdown;
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        countdownElement.style.display = 'none';
+                    }
+                }, 1000);
+                
+                setTimeout(() => {
+                    gameState.exitOpen = true;
+                    const exitElement = document.getElementById('exit');
+                    exitElement.classList.remove('closed');
+                    exitElement.classList.add('open');
+                    sounds.exitOpen();
+                    showNotification('✅ The exit has been opened!');
+                    
+                    // Start closing countdown
+                    countdownElement.style.display = 'block';
+                    countdownElement.style.color = 'green';
+                    let closeCountdown = 10; // Shorter for testing
+                    countdownElement.textContent = closeCountdown;
+                    
+                    const closeCountdownInterval = setInterval(() => {
+                        closeCountdown--;
+                        countdownElement.textContent = closeCountdown;
+                        if (closeCountdown <= 3) {
+                            countdownElement.style.color = 'red';
+                        }
+                        if (closeCountdown <= 0) {
+                            clearInterval(closeCountdownInterval);
+                            countdownElement.style.display = 'none';
+                        }
+                    }, 1000);
+                    
+                    setTimeout(() => {
+                        gameState.exitOpen = false;
+                        exitElement.classList.remove('open');
+                        exitElement.classList.add('closed');
+                        sounds.exitClose();
+                        showNotification('🔒 LOCKDOWN 🔒', true);
+                    }, 10000);
+                }, 5000);
             }
         }
 
