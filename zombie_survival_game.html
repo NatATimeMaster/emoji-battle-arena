@@ -78,7 +78,7 @@
             border: 2px solid #00aa00;
             position: absolute;
             top: 10px;
-            right: 10px;
+            left: 10px;
             border-radius: 5px;
             display: flex;
             align-items: center;
@@ -95,6 +95,18 @@
             transform: translateX(-50%);
             font-size: 12px;
             color: white;
+        }
+
+        .lab-opening {
+            width: 20px;
+            height: 30px;
+            background: transparent;
+            border: 2px solid #00aa00;
+            position: absolute;
+            top: 15px;
+            right: -22px;
+            border-radius: 0 5px 5px 0;
+            border-left: none;
         }
 
         .exit {
@@ -315,20 +327,21 @@
                 <button onclick="showSurvivorsModal()">View Stats</button>
                 <button onclick="saveGame()">Save</button>
                 <button onclick="loadGame()">Load</button>
-                <button onclick="changeFloor(-10)" id="go-up">Go Up</button>
-                <button onclick="changeFloor(10)" id="go-down">Go Down</button>
+                <button onclick="changeFloor(-1)" id="go-up">Go Up</button>
+                <button onclick="changeFloor(1)" id="go-down">Go Down</button>
             </div>
         </div>
 
         <div class="game-area">
-            <div class="room">
-                <div class="laboratory" id="laboratory" style="display: none;">
-                    <div class="lab-label">Laboratory</div>
-                    LAB
-                </div>
-                <div class="exit" id="exit">Exit</div>
-                <div class="knife" id="knife">🔪</div>
+            <div class="laboratory" id="laboratory" style="display: none;">
+                <div class="lab-label">Laboratory</div>
+                LAB
+                <div class="lab-opening" id="lab-opening"></div>
             </div>
+            <div class="room">
+                <div class="exit" id="exit">Exit</div>
+            </div>
+            <div class="knife" id="knife">🔪</div>
             <div class="notification" id="notification"></div>
         </div>
 
@@ -719,6 +732,9 @@
                 addInitialNPCs();
             }
             updateStats();
+            
+            // Start character movement immediately
+            startCharacterMovement();
             
             // Set up knife click handler
             document.getElementById('knife').onclick = function() {
@@ -1184,7 +1200,7 @@
         // Floor navigation
         function changeFloor(direction) {
             const newFloor = gameState.currentFloor + direction;
-            if (newFloor < 10 || newFloor > 50) return;
+            if (newFloor < 1 || newFloor > 50) return;
             
             // Save current floor state
             saveFloorState();
