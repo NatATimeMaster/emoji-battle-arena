@@ -166,7 +166,7 @@
     const TAU = Math.PI * 2;
     const MAX_PER_FLOOR = 20;
     const MAX_DOCTORS_PER_FLOOR = 3;
-    const LAB_FLOORS = new Set([50]); // Prototype: only 50 has lab
+    const LAB_FLOORS = new Set([50, 40, 30, 20, 10]);
 
     const ROLE = {
       CIVILIAN: 'civilian',
@@ -371,11 +371,11 @@
         // Knife location (top-right inside room)
         this.knifePos = { x: 0, y: 0 };
 
-        // Floors: 50 (lab), 49 (no lab)
-        this.floors = {
-          50: new FloorState(50, true),
-          49: new FloorState(49, false),
-        };
+        // Floors: 1..50; lab on 50,40,30,20,10
+        this.floors = {};
+        for (let n = 1; n <= 50; n++) {
+          this.floors[n] = new FloorState(n, LAB_FLOORS.has(n));
+        }
         this.currentFloor = 50;
 
         // Records
@@ -436,7 +436,7 @@
     const floorLabel = document.getElementById('floorLabel');
 
     const btnFloor50 = document.getElementById('btnFloor50');
-    const btnFloor49 = document.getElementById('btnFloor49');
+    const btnFloor49 = document.getElementById('btnFloor49'); // kept for quick jump
     const btnUp = document.getElementById('btnUp');
     const btnDown = document.getElementById('btnDown');
     const btnAdd = document.getElementById('btnAdd');
@@ -491,15 +491,14 @@
           });
           f50.characters.push(c);
         }
-        // Knife on floor
-        const knife = new Item('knife', game.knifePos.x, game.knifePos.y);
-        f50.items.push(knife);
       }
-      // Also ensure knife exists on floor 49
-      const f49 = game.floors[49];
-      if (!f49.items.some(it => it.type === 'knife')) {
-        const knife2 = new Item('knife', game.knifePos.x, game.knifePos.y);
-        f49.items.push(knife2);
+      // Ensure a knife exists on every floor initially
+      for (let n = 1; n <= 50; n++) {
+        const fl = game.floors[n];
+        if (!fl.items.some(it => it.type === 'knife')) {
+          const knife = new Item('knife', game.knifePos.x, game.knifePos.y);
+          fl.items.push(knife);
+        }
       }
     }
 
@@ -636,6 +635,7 @@
 
     // Floor switching
     function switchFloor(num) {
+      num = Math.max(1, Math.min(50, num));
       game.currentFloor = num;
       floorLabel.textContent = `Floor ${num}`;
       btnFloor50.classList.toggle('primary', num === 50);
@@ -644,15 +644,16 @@
     }
 
     btnFloor50.onclick = () => switchFloor(50);
-    btnFloor49.onclick = () => switchFloor(49);
+    btnFloor49.onclick = () => switchFloor(49); // quick jump to non-lab neighbor for testing
     btnUp.onclick = () => {
       const next = Math.min(50, game.currentFloor + 1);
       switchFloor(next);
     };
     btnDown.onclick = () => {
-      const next = Math.max(49, game.currentFloor - 1);
+      const next = Math.max(1, game.currentFloor - 1);
       switchFloor(next);
     };
+
 
     // Save/Load
     function serializeCharacter(ch) {
@@ -1140,7 +1141,7 @@
 
     function handleExitTransfer(floor, c) {
       const destNum = floor.floorNumber - 1;
-      if (destNum >= 49) {
+      if (destNum >= 1) {
         const dest = game.floors[destNum];
         // Capacity check
         const totalDest = dest.characters.filter(ch => !ch.removed).length;
@@ -1152,7 +1153,7 @@
         dest.incoming.push(data);
         Sound.sfx('exit');
       } else {
-        // Last floor prototype: escaped the building
+        // Floor 1 exits building
         c.removed = true; Sound.sfx('exit');
         game.records.survivors.push({ name: c.name, status: 'Escaped', id: c.id });
       }
