@@ -1,0 +1,2523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emoji Arena</title>
+  <style>
+    :root {
+      --player1-color: #4CAF50;
+      --player2-color: #2196F3;
+      --arena-bg: linear-gradient(135deg, #1e1e2e, #2d2d44);
+      --text-glow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: var(--arena-bg);
+      color: #fff;
+      user-select: none;
+    }
+
+    /* Character Selection Overlay */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 9999;
+      overflow-y: auto;
+      padding: 10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .overlay h1 {
+      font-size: clamp(1.5rem, 5vw, 3rem);
+      margin: 10px 0;
+      text-shadow: var(--text-glow);
+      background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #f9ca24);
+      background-size: 400% 400%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient 3s ease infinite;
+      text-align: center;
+    }
+
+    .overlay h2 {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+      text-align: center;
+    }
+
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .team-select {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1000px;
+      gap: 20px;
+    }
+
+    @media (min-width: 768px) {
+      .team-select {
+        flex-direction: row;
+        gap: 30px;
+      }
+    }
+
+    .team {
+      flex: 1;
+      min-width: 280px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 15px;
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .team h3 {
+      text-align: center;
+      font-size: clamp(1rem, 4vw, 1.8rem);
+      margin: 0 0 15px 0;
+      text-shadow: var(--text-glow);
+    }
+
+    .character-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    @media (min-width: 480px) {
+      .character-grid {
+        grid-template-columns: repeat(6, 1fr);
+      }
+    }
+
+    @media (min-width: 768px) {
+      .character-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .char-btn {
+      aspect-ratio: 1;
+      font-size: clamp(1.2rem, 5vw, 2rem);
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      cursor: pointer;
+      color: white;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 45px;
+    }
+
+    .char-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .char-btn:active {
+      transform: scale(0.95);
+    }
+
+    .char-btn.selected-p1 {
+      background: var(--player1-color);
+      border-color: var(--player1-color);
+      color: white;
+      box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+    }
+
+    .char-btn.selected-p2 {
+      background: var(--player2-color);
+      border-color: var(--player2-color);
+      color: white;
+      box-shadow: 0 0 20px rgba(33, 150, 243, 0.6);
+    }
+
+    .selection-info {
+      text-align: center;
+      margin: 10px 0;
+      font-size: clamp(0.7rem, 2.5vw, 0.9rem);
+      opacity: 0.8;
+    }
+
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+      width: 100%;
+    }
+
+    .start-btn {
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      padding: 12px 30px;
+      background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+      border: none;
+      border-radius: 25px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+      transition: all 0.3s ease;
+      min-width: 150px;
+    }
+
+    .start-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 7px 20px rgba(255, 107, 107, 0.6);
+    }
+
+    .start-btn:active {
+      transform: translateY(0);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .hint {
+      margin: 10px 0 0 0;
+      font-size: clamp(0.6rem, 2vw, 0.9rem);
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    /* Arena Container */
+    .arena-container {
+      width: 100vw;
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+    }
+
+    .info-header {
+      text-align: center;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      margin-bottom: 10px;
+      text-shadow: var(--text-glow);
+      font-weight: bold;
+    }
+
+    .hp-area {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100vw;
+      min-height: 60px;
+      overflow: hidden;
+      padding: 0 5px;
+      box-sizing: border-box;
+    }
+
+    .team-column {
+      flex: 1;
+      max-width: 48%;
+      min-width: 120px;
+      overflow: hidden;
+    }
+
+    .team-header {
+      font-size: clamp(0.8rem, 2.5vw, 1.2rem);
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 8px;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+      padding-bottom: 3px;
+    }
+
+    .hp-container {
+      margin-bottom: 5px;
+    }
+
+    .hp-bar-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      margin-bottom: 3px;
+    }
+
+    #player1HP .hp-bar-wrapper {
+      justify-content: flex-start;
+    }
+
+    #player2HP .hp-bar-wrapper {
+      justify-content: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .character-icon {
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      min-width: 25px;
+      text-align: center;
+    }
+
+    .hp-bar {
+      background: rgba(0, 0, 0, 0.7);
+      height: 16px;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 50px;
+      max-width: 120px;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      overflow: hidden;
+    }
+
+    .hp-bar .current-hp {
+      background: linear-gradient(90deg, #4CAF50, #8BC34A);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px;
+      transition: width 0.5s ease;
+      width: 100%;
+    }
+
+    .hp-bar .shield {
+      background: linear-gradient(90deg, #fff, #e0e0e0);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      right: 0;
+      border-radius: 0 6px 6px 0;
+      opacity: 0.9;
+      width: 0%;
+    }
+
+    .hp-bar .fakehp {
+      background: linear-gradient(90deg, #ffeb3b, #ffc107);
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 6px 0 0 6px;
+      opacity: 0.8;
+      width: 0%;
+    }
+
+    .hp-text {
+      font-size: clamp(0.6rem, 2vw, 0.8rem);
+      color: #fff;
+      min-width: 40px;
+      text-align: right;
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    canvas {
+      border: 3px solid rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      flex: 1;
+      max-width: 95vw;
+      max-height: 65vh;
+      background: radial-gradient(circle, #2c2c54, #1a1a2e);
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+      transition: all 0.5s ease;
+    }
+
+    canvas.hell-trial {
+      background: radial-gradient(circle, #4a1a1a, #2a0a0a);
+      border-color: #ff4444;
+      box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    }
+
+    /* Game Over Screen */
+    .game-over {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      padding: 30px;
+      border: 3px solid #fff;
+      border-radius: 20px;
+      text-align: center;
+      z-index: 10000;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+      display: none;
+    }
+
+    .game-over.show {
+      display: block;
+    }
+
+    .game-over h2 {
+      margin: 0 0 20px 0;
+      color: #fff;
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      text-shadow: var(--text-glow);
+    }
+
+    .game-over .winner {
+      font-size: clamp(2rem, 8vw, 4rem);
+      margin: 20px 0;
+      background: linear-gradient(45deg, #ffd700, #ff8c00);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .reset-btn {
+      margin-top: 15px;
+      padding: 12px 25px;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      cursor: pointer;
+      background: linear-gradient(45deg, #e74c3c, #c0392b);
+      color: white;
+      border: 2px solid #e74c3c;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      font-weight: bold;
+    }
+
+    .reset-btn:hover {
+      background: linear-gradient(45deg, #c0392b, #a93226);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+    }
+
+    /* Death Animation */
+    .death-animation {
+      position: absolute;
+      pointer-events: none;
+      font-size: 48px;
+      animation: deathPop 2s ease-out forwards;
+      z-index: 1000;
+    }
+
+    @keyframes deathPop {
+      0% { 
+        transform: scale(1) rotate(0deg); 
+        opacity: 1; 
+      }
+      50% { 
+        transform: scale(2.5) rotate(180deg); 
+        opacity: 0.8; 
+      }
+      100% { 
+        transform: scale(0) rotate(360deg); 
+        opacity: 0; 
+      }
+    }
+
+    /* Status Indicators */
+    .status-indicators {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      max-width: 60px;
+    }
+
+    .status-indicator {
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 0.6rem;
+      padding: 1px 3px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .team {
+        padding: 10px;
+        min-width: 250px;
+      }
+      
+      .character-grid {
+        gap: 5px;
+      }
+      
+      .hp-area {
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      
+      canvas {
+        max-height: 55vh;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .overlay {
+        padding: 5px;
+      }
+      
+      .overlay h1 {
+        margin: 5px 0;
+      }
+      
+      .team {
+        padding: 10px;
+      }
+      
+      .controls {
+        margin-top: 10px;
+      }
+    }
+
+    /* Character Visual Effects */
+    .frozen {
+      animation: frozen 2s ease-in-out infinite;
+      filter: brightness(0.8) hue-rotate(180deg);
+    }
+
+    @keyframes frozen {
+      0% { 
+        box-shadow: 0 0 15px #87ceeb; 
+        filter: brightness(0.8) hue-rotate(180deg);
+      }
+      50% { 
+        box-shadow: 0 0 25px #87ceeb, 0 0 35px #00bfff; 
+        filter: brightness(0.6) hue-rotate(180deg);
+      }
+      100% { 
+        box-shadow: 0 0 15px #87ceeb; 
+        filter: brightness(0.8) hue-rotate(180deg);
+      }
+    }
+
+    .blinkFlash {
+      animation: blinkFlash 0.3s ease-out;
+    }
+
+    @keyframes blinkFlash {
+      0% { 
+        transform: scale(0) rotate(0deg);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1) rotate(180deg);
+        opacity: 0.8;
+      }
+      100% { 
+        transform: scale(0) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    .overloadPulse {
+      animation: overloadPulse 2s ease-out infinite;
+    }
+
+    @keyframes overloadPulse {
+      0% { 
+        transform: scale(0);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 0.8;
+      }
+      100% { 
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    .progressionFlash {
+      animation: progressionFlash 0.5s ease-in-out;
+    }
+
+    @keyframes progressionFlash {
+      0% { box-shadow: 0 0 10px #00ff88; }
+      50% { box-shadow: 0 0 30px #00ff88, 0 0 40px #00ff88; }
+      100% { box-shadow: 0 0 10px #00ff88; }
+    }
+
+    .frenzyBoost {
+      animation: frenzyBoost 0.3s ease-out;
+    }
+
+    @keyframes frenzyBoost {
+      0% { 
+        box-shadow: 0 0 15px #ff6600; 
+        transform: scale(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ff6600, 0 0 35px #ff8c00; 
+        transform: scale(1.05);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ff6600; 
+        transform: scale(1.0);
+      }
+    }
+
+    .frenzy-low {
+      filter: brightness(1.0) saturate(1.0);
+    }
+
+    .frenzy-medium {
+      filter: brightness(1.2) saturate(1.3) hue-rotate(15deg);
+    }
+
+    .frenzy-high {
+      filter: brightness(1.5) saturate(1.6) hue-rotate(30deg);
+    }
+
+    .frenzy-max {
+      filter: brightness(2.0) saturate(2.0) hue-rotate(45deg);
+      box-shadow: 0 0 20px #ff6600;
+    }
+
+    .burning {
+      animation: burning 1s ease-in-out infinite;
+    }
+
+    @keyframes burning {
+      0% { 
+        box-shadow: 0 0 10px #ff4444; 
+        filter: brightness(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 20px #ff4444, 0 0 30px #ff6666; 
+        filter: brightness(1.3);
+      }
+      100% { 
+        box-shadow: 0 0 10px #ff4444; 
+        filter: brightness(1.0);
+      }
+    }
+
+    .marked {
+      animation: marked 2s ease-in-out infinite;
+    }
+
+    @keyframes marked {
+      0% { box-shadow: 0 0 10px #00bfff; }
+      50% { box-shadow: 0 0 20px #00bfff, 0 0 30px #00bfff; }
+      100% { box-shadow: 0 0 10px #00bfff; }
+    }
+
+    .stunned {
+      animation: stunned 0.5s ease-in-out infinite;
+    }
+
+    @keyframes stunned {
+      0% { transform: scale(1.0) rotate(0deg); }
+      25% { transform: scale(0.95) rotate(-2deg); }
+      50% { transform: scale(1.0) rotate(0deg); }
+      75% { transform: scale(0.95) rotate(2deg); }
+      100% { transform: scale(1.0) rotate(0deg); }
+    }
+
+    .invulnerable {
+      animation: invulnerable 1s ease-in-out infinite;
+    }
+
+    @keyframes invulnerable {
+      0% { 
+        box-shadow: 0 0 15px #ffd700; 
+        filter: brightness(1.2);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ffd700, 0 0 35px #ffed4e; 
+        filter: brightness(1.5);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ffd700; 
+        filter: brightness(1.2);
+      }
+    }
+
+    .mimicking {
+      animation: mimicking 2s ease-in-out infinite;
+    }
+
+    @keyframes mimicking {
+      0% { 
+        transform: scale(1.0);
+        filter: hue-rotate(0deg) brightness(1.0);
+      }
+      50% { 
+        transform: scale(1.1);
+        filter: hue-rotate(180deg) brightness(1.3);
+      }
+      100% { 
+        transform: scale(1.0);
+        filter: hue-rotate(360deg) brightness(1.0);
+      }
+    }
+
+    .charging {
+      animation: charging 1s ease-in-out infinite;
+    }
+
+    @keyframes charging {
+      0% { 
+        box-shadow: 0 0 10px #00ff00; 
+        transform: scale(1.0);
+      }
+      50% { 
+        box-shadow: 0 0 20px #00ff00, 0 0 30px #32cd32; 
+        transform: scale(1.05);
+      }
+      100% { 
+        box-shadow: 0 0 10px #00ff00; 
+        transform: scale(1.0);
+      }
+    }
+
+    .enraged {
+      animation: enraged 0.5s ease-in-out infinite;
+    }
+
+    @keyframes enraged {
+      0% { 
+        box-shadow: 0 0 15px #ff0000; 
+        filter: brightness(1.2) saturate(1.5);
+      }
+      50% { 
+        box-shadow: 0 0 25px #ff0000, 0 0 35px #ff4444; 
+        filter: brightness(1.5) saturate(2.0);
+      }
+      100% { 
+        box-shadow: 0 0 15px #ff0000; 
+        filter: brightness(1.2) saturate(1.5);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="characterSelect">
+    <h1>⚔️ Emoji Arena ⚔️</h1>
+    <h2>Choose Your Champions</h2>
+    <div class="selection-info">Select up to 5 characters per team</div>
+    <div class="team-select">
+      <div class="team">
+        <h3>🟢 Player 1</h3>
+        <div class="character-grid" id="player1Chars"></div>
+        <div class="selection-info">Selected: <span id="p1Count">0</span>/5</div>
+      </div>
+      <div class="team">
+        <h3>🔵 Player 2</h3>
+        <div class="character-grid" id="player2Chars"></div>
+        <div class="selection-info">Selected: <span id="p2Count">0</span>/5</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="start-btn" onclick="startGame()" id="startBtn" disabled>Start Battle</button>
+      <div class="hint">Select at least one character for each team to begin</div>
+    </div>
+  </div>
+
+  <div class="arena-container" id="arenaContainer">
+    <div class="info-header" id="matchInfo"></div>
+    <div class="hp-area">
+      <div class="team-column" id="player1HP">
+        <div class="team-header">🟢 Player 1</div>
+      </div>
+      <div class="team-column" id="player2HP">
+        <div class="team-header">🔵 Player 2</div>
+      </div>
+    </div>
+    <canvas id="arena"></canvas>
+    <div class="status-indicators" id="globalStatus"></div>
+  </div>
+
+  <div class="game-over" id="gameOver">
+    <h2 id="gameOverTitle">Game Over</h2>
+    <div class="winner" id="winnerText"></div>
+    <button class="reset-btn" onclick="resetGame()">Play Again</button>
+  </div>
+
+
+
+  <script>
+    // Character definitions with emojis
+    const characters = [
+      { emoji: "😈", name: "Demonlord" },
+      { emoji: "👽", name: "Terestro" },
+      { emoji: "👾", name: "Gamemaster" },
+      { emoji: "💀", name: "Deathblow" },
+      { emoji: "🤡", name: "Mimic" },
+      { emoji: "🎃", name: "Tricker" },
+      { emoji: "👹", name: "Grinch" },
+      { emoji: "👼🏻", name: "Angerus" },
+      { emoji: "🤵🏻", name: "Magico" },
+      { emoji: "🐯", name: "Clawhard" },
+      { emoji: "🦁", name: "Kingstone" },
+      { emoji: "🐺", name: "Moonhowl" },
+      { emoji: "🐻‍❄️", name: "Antarticus" },
+      { emoji: "🐼", name: "Black Spot" },
+      { emoji: "🦊", name: "Frenzy" },
+      { emoji: "🐰", name: "Hopper" }
+    ];
+
+    // Game state
+    let selectedP1 = [];
+    let selectedP2 = [];
+    let ctx, canvas;
+    let charactersInArena = [];
+    let projectiles = [];
+    let gameRunning = false;
+    let gameTime = 0;
+
+    // Audio system for sound effects
+    class AudioManager {
+      constructor() {
+        this.audioContext = null;
+        this.initAudio();
+      }
+
+      initAudio() {
+        try {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn('Audio not supported');
+        }
+      }
+
+      playSound(frequency, duration = 0.1, type = 'sine', volume = 0.1) {
+        if (!this.audioContext) return;
+        
+        try {
+          const oscillator = this.audioContext.createOscillator();
+          const gainNode = this.audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(this.audioContext.destination);
+          
+          oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+          oscillator.type = type;
+          
+          gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+          
+          oscillator.start(this.audioContext.currentTime);
+          oscillator.stop(this.audioContext.currentTime + duration);
+        } catch (e) {
+          // Silent fail
+        }
+      }
+
+      shoot() { this.playSound(660, 0.1, 'square', 0.05); }
+      hit() { this.playSound(880, 0.15, 'sawtooth', 0.08); }
+      bounce() { this.playSound(220, 0.1, 'triangle', 0.06); }
+      death() { this.playSound(110, 0.5, 'sine', 0.1); }
+      ability() { this.playSound(1100, 0.2, 'square', 0.07); }
+    }
+
+    const audio = new AudioManager();
+
+    // Projectile class for all projectiles
+    class Projectile {
+      constructor(x, y, vx, vy, emoji, damage, owner, type = 'basic', data = {}) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.emoji = emoji;
+        this.damage = damage;
+        this.owner = owner;
+        this.type = type;
+        this.data = { ...data };
+        this.bounces = 0;
+        this.maxBounces = data.maxBounces || 0;
+        this.lifetime = data.lifetime || Infinity;
+        this.age = 0;
+        this.size = data.size || 16;
+        this.canHitOwner = data.canHitOwner || false;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        if (this.age > this.lifetime) {
+          return false;
+        }
+
+        // Handle specific projectile types
+        if (this.type === "fire") {
+          return this.handleFireUpdate();
+        }
+        
+        if (this.type === "star") {
+          return this.handleStarUpdate();
+        }
+        
+        if (this.type === "coin" || this.type === "bank") {
+          return this.handleCoinUpdate();
+        }
+        
+        if (this.type === "dangerskull") {
+          return this.handleDangerskullUpdate();
+        }
+        
+        if (this.type === "redball" || this.type === "balloon") {
+          return this.handleMimicProjectileUpdate();
+        }
+        
+        if (this.type === "bat") {
+          return this.handleBatUpdate();
+        }
+        
+        if (this.type === "giantboulder" || this.type === "boulder" || this.type === "rock") {
+          return this.handleBoulderUpdate();
+        }
+        
+        if (this.type === "blackblock" || this.type === "whiteblock") {
+          return this.handleBlockUpdate();
+        }
+        
+        if (this.type === "card") {
+          return this.handleCardUpdate();
+        }
+        
+        if (this.type === "windslash") {
+          return this.handleWindslashUpdate();
+        }
+        
+        if (this.type === "leo") {
+          return this.handleLeoUpdate();
+        }
+        
+        if (this.type === "moon" || this.type === "fullmoon" || this.type === "guaranteedmoon" || this.type === "wolfsense") {
+          return this.handleMoonUpdate();
+        }
+        
+        if (this.type === "frozeflake") {
+          return this.handleFrozeflakeUpdate();
+        }
+
+        // Default projectile behavior
+        return true;
+      }
+
+      handleFireUpdate() {
+        // Check wall collision for fire projectiles
+        const margin = this.size;
+        let hitWall = false;
+        let hitSide = null;
+
+        if (this.x <= margin) {
+          hitSide = 'left';
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          hitSide = 'right';
+          hitWall = true;
+        } else if (this.y <= margin) {
+          hitSide = 'top';
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          hitSide = 'bottom';
+          hitWall = true;
+        }
+
+        if (hitWall) {
+          if (this.owner && this.owner.emoji === "😈") {
+            DemonlordModule.handleFireWallHit(this, hitSide);
+          }
+          return false; // Fire stops when hitting wall
+        }
+
+        return true;
+      }
+
+      handleStarUpdate() {
+        // Check wall collision for star projectiles - stars stop when hitting walls
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          return false; // Star disappears when hitting wall
+        }
+
+        return true;
+      }
+
+      handleCoinUpdate() {
+        // Banks don't move
+        if (this.type === "bank") {
+          this.age++;
+          return this.age <= this.lifetime;
+        }
+        
+        // Handle coin wall bouncing
+        const margin = this.size;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.GamemasterModule) {
+          return GamemasterModule.handleCoinWallBounce(this);
+        }
+
+        return true;
+      }
+
+      handleDangerskullUpdate() {
+        // Check lifetime
+        const currentTime = gameTime;
+        if (currentTime - this.data.spawnTime >= this.data.lifetime) {
+          // Remove from owner's active list
+          if (this.owner && this.owner.abilityData && window.DeathblowModule) {
+            DeathblowModule.removeDangerskull(this.owner, this);
+          }
+          return false;
+        }
+
+        // Handle wall bouncing for Dangerskulls
+        const margin = this.size;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.DeathblowModule) {
+          return DeathblowModule.handleDangerskullWallBounce(this);
+        }
+
+        return true;
+      }
+
+      handleMimicProjectileUpdate() {
+        if (this.type === "redball") {
+          // Handle wall bouncing for red ball
+          const margin = this.size;
+          let hitWall = false;
+
+          if (this.x <= margin) {
+            this.x = margin;
+            this.vx *= -1;
+            hitWall = true;
+          } else if (this.x >= canvas.width - margin) {
+            this.x = canvas.width - margin;
+            this.vx *= -1;
+            hitWall = true;
+          }
+
+          if (this.y <= margin) {
+            this.y = margin;
+            this.vy *= -1;
+            hitWall = true;
+          } else if (this.y >= canvas.height - margin) {
+            this.y = canvas.height - margin;
+            this.vy *= -1;
+            hitWall = true;
+          }
+
+          if (hitWall && window.MimicModule) {
+            return MimicModule.handleRedBallBounce(this);
+          }
+
+          return true;
+        } else if (this.type === "balloon") {
+          // Check wall collision for balloons - they pop
+          const margin = this.size;
+          if (this.x <= margin || this.x >= canvas.width - margin ||
+              this.y <= margin || this.y >= canvas.height - margin) {
+            return window.MimicModule ? MimicModule.handleBalloonWallHit(this) : false;
+          }
+
+          return true;
+        }
+
+        return true;
+      }
+
+      handleBatUpdate() {
+        // Handle blood sucking behavior
+        if (!window.TrickerModule || !TrickerModule.handleBatUpdate(this)) {
+          return false;
+        }
+
+        // Handle wall bouncing
+        const margin = this.size;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.TrickerModule) {
+          TrickerModule.handleBatWallBounce(this);
+        }
+
+        return true;
+      }
+
+      handleBoulderUpdate() {
+        // Handle wall bouncing and splitting for boulders
+        const margin = this.size / 2;
+        let hitWall = false;
+
+        if (this.x <= margin) {
+          this.x = margin;
+          this.vx *= -1;
+          hitWall = true;
+        } else if (this.x >= canvas.width - margin) {
+          this.x = canvas.width - margin;
+          this.vx *= -1;
+          hitWall = true;
+        }
+
+        if (this.y <= margin) {
+          this.y = margin;
+          this.vy *= -1;
+          hitWall = true;
+        } else if (this.y >= canvas.height - margin) {
+          this.y = canvas.height - margin;
+          this.vy *= -1;
+          hitWall = true;
+        }
+
+        if (hitWall && window.GrinchModule) {
+          return GrinchModule.handleBoulderWallBounce(this);
+        }
+
+        return true;
+      }
+
+      handleBlockUpdate() {
+        // Check wall collision - blocks disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        // Enhanced blocks can block other projectiles
+        if (this.data.enhanced && this.data.canBlockProjectiles) {
+          this.checkProjectileBlocking();
+        }
+
+        return true;
+      }
+
+      checkProjectileBlocking() {
+        // Check collision with other projectiles for enhanced blocks
+        projectiles.forEach(otherProjectile => {
+          if (otherProjectile === this) return;
+          if (otherProjectile.owner === this.owner) return; // Don't block own projectiles
+          
+          const dx = this.x - otherProjectile.x;
+          const dy = this.y - otherProjectile.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < (this.size + otherProjectile.size)) {
+            if (window.KaelModule) {
+              KaelModule.handleEnhancedBlockVsProjectile(this, otherProjectile);
+            }
+          }
+        });
+      }
+
+      handleCardUpdate() {
+        // Check wall collision - cards disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        return true;
+      }
+
+      handleWindslashUpdate() {
+        // Check wall collision - windslashes disappear when hitting borders
+        const margin = this.size;
+        if (this.x <= margin || this.x >= canvas.width - margin ||
+            this.y <= margin || this.y >= canvas.height - margin) {
+          const index = projectiles.indexOf(this);
+          if (index > -1) {
+            projectiles.splice(index, 1);
+          }
+          return false;
+        }
+
+        return true;
+      }
+
+      handleLeoUpdate() {
+        // Handle wall bouncing for Leo projectiles
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced && window.KingstoneModule) {
+          KingstoneModule.handleLeoBounce(this);
+        }
+
+        return true;
+      }
+
+      handleMoonUpdate() {
+        // Handle guaranteed moon movement
+        if (this.type === "guaranteedmoon" && window.MoonhowlModule) {
+          return MoonhowlModule.handleGuaranteedMoonUpdate(this);
+        }
+        
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        // Handle wall bouncing for regular and full moons
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced) {
+          this.data.bounceCount++;
+          
+          // Handle Full Moon border bouncing
+          if (this.type === "fullmoon" && this.data.bounceCount >= this.data.maxBounces) {
+            if (window.MoonhowlModule) {
+              MoonhowlModule.handleFullMoonBorderHit(this);
+            }
+            return false;
+          }
+        }
+
+        // Handle Wolfsense movement
+        if (this.type === "wolfsense" && window.MoonhowlModule) {
+          // Wolfsense movement is handled in MoonhowlModule.updateWolfsense
+          return true;
+        }
+
+        return true;
+      }
+
+      handleFrozeflakeUpdate() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.age++;
+
+        // Handle wall bouncing
+        const margin = this.size;
+        let bounced = false;
+        
+        if (this.x <= margin || this.x >= canvas.width - margin) {
+          this.vx = -this.vx;
+          this.x = Math.max(margin, Math.min(canvas.width - margin, this.x));
+          bounced = true;
+        }
+        
+        if (this.y <= margin || this.y >= canvas.height - margin) {
+          this.vy = -this.vy;
+          this.y = Math.max(margin, Math.min(canvas.height - margin, this.y));
+          bounced = true;
+        }
+        
+        if (bounced) {
+          this.data.bounceCount++;
+          
+          // Disappear after 5th bounce
+          if (this.data.bounceCount >= this.data.maxBounces) {
+            const index = projectiles.indexOf(this);
+            if (index > -1) {
+              projectiles.splice(index, 1);
+            }
+            
+            if (window.AntarticusModule) {
+              const frozeIndex = AntarticusModule.frozeflakeProjectiles.indexOf(this);
+              if (frozeIndex > -1) {
+                AntarticusModule.frozeflakeProjectiles.splice(frozeIndex, 1);
+              }
+            }
+            
+            console.log(`❄️ Frozeflake disappeared after ${this.data.bounceCount} bounces`);
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.font = `${this.size * 2}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // Add glow for special projectiles
+        if (this.type === 'fire') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 10;
+        } else if (this.type === 'star') {
+          if (this.data.enhanced) {
+            ctx.shadowColor = "#ffd700";
+            ctx.shadowBlur = 15;
+          } else {
+            ctx.shadowColor = "#ffffff";
+            ctx.shadowBlur = 8;
+          }
+        } else if (this.type === 'coin') {
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 8;
+        } else if (this.type === 'bank') {
+          ctx.shadowColor = "#ffff00";
+          ctx.shadowBlur = 12;
+          // Add pulsing effect for banks
+          const pulse = Math.sin(this.age * 0.1) * 0.2 + 1;
+          ctx.globalAlpha = pulse;
+        } else if (this.type === 'dangerskull') {
+          ctx.shadowColor = "#ff0000";
+          ctx.shadowBlur = 10;
+          // Add pulsing effect for Dangerskulls
+          const pulse = Math.sin(this.age * 0.15) * 0.1 + 0.9;
+          ctx.globalAlpha = pulse;
+        } else if (this.type === 'redball') {
+          ctx.shadowColor = "#ff4444";
+          ctx.shadowBlur = 8;
+        } else if (this.type === 'balloon') {
+          ctx.shadowColor = "#ff69b4";
+          ctx.shadowBlur = 6;
+        } else if (this.type === 'bat') {
+          if (this.data.isBloodSucking) {
+            ctx.shadowColor = "#8b0000";
+            ctx.shadowBlur = 12;
+            // Pulsing effect during blood suck
+            const pulse = Math.sin(this.age * 0.3) * 0.3 + 0.7;
+            ctx.globalAlpha = pulse;
+          } else {
+            ctx.shadowColor = "#4b0082";
+            ctx.shadowBlur = 8;
+          }
+        } else if (this.type === "giantboulder" || this.type === "boulder" || this.type === "rock") {
+          // Boulder effects based on size
+          if (this.data.boulderType === "giant") {
+            ctx.shadowColor = "#8b4513";
+            ctx.shadowBlur = 15;
+          } else if (this.data.boulderType === "boulder") {
+            ctx.shadowColor = "#8b4513";
+            ctx.shadowBlur = 10;
+                     } else if (this.data.boulderType === "rock") {
+             ctx.shadowColor = "#8b4513";
+             ctx.shadowBlur = 5;
+           }
+        } else if (this.type === "blackblock" || this.type === "whiteblock") {
+          // Block effects
+          if (this.data.enhanced) {
+            if (this.data.blockType === "black") {
+              ctx.shadowColor = "#000000";
+              ctx.shadowBlur = 15;
+            } else {
+              ctx.shadowColor = "#ffffff";
+              ctx.shadowBlur = 15;
+            }
+            // Pulsing effect for enhanced blocks
+            const pulse = Math.sin(this.age * 0.2) * 0.3 + 0.7;
+            ctx.globalAlpha = pulse;
+          } else {
+            if (this.data.blockType === "black") {
+              ctx.shadowColor = "#333333";
+              ctx.shadowBlur = 8;
+            } else {
+              ctx.shadowColor = "#cccccc";
+              ctx.shadowBlur = 8;
+            }
+          }
+        } else if (this.type === "card") {
+          // Card effects based on suit
+          switch (this.data.cardType) {
+            case "hearts":
+              ctx.shadowColor = "#ff0000";
+              ctx.shadowBlur = 10;
+              break;
+            case "spades":
+              ctx.shadowColor = "#000000";
+              ctx.shadowBlur = 10;
+              break;
+            case "clubs":
+              ctx.shadowColor = "#008000";
+              ctx.shadowBlur = 10;
+              break;
+            case "diamonds":
+              ctx.shadowColor = "#0080ff";
+              ctx.shadowBlur = 10;
+                           break;
+           }
+        } else if (this.type === "windslash") {
+          // Windslash effects based on Life Surge level
+          if (this.data.lifeSurgeLevel >= 3) {
+            // Enhanced windslash at 10% HP
+            ctx.shadowColor = "#ff6600";
+            ctx.shadowBlur = 15;
+          } else if (this.data.lifeSurgeLevel >= 1) {
+            // Life Surge active
+            ctx.shadowColor = "#00ff88";
+            ctx.shadowBlur = 10;
+                     } else {
+             // Normal windslash
+             ctx.shadowColor = "#88ccff";
+             ctx.shadowBlur = 8;
+           }
+                 } else if (this.type === "leo") {
+           // Leo-specific visual effects
+           ctx.shadowColor = "#ffd700"; // Golden glow
+           ctx.shadowBlur = 12;
+        } else if (this.type === "fullmoon") {
+          // Full Moon - bright golden glow
+          ctx.shadowColor = "#ffd700";
+          ctx.shadowBlur = 20;
+        } else if (this.type === "guaranteedmoon") {
+          // Guaranteed Moon - red/orange glow
+          ctx.shadowColor = "#ff4500";
+          ctx.shadowBlur = 15;
+        } else if (this.type === "wolfsense") {
+          // Wolfsense - eerie blue glow
+          ctx.shadowColor = "#00bfff";
+          ctx.shadowBlur = 12;
+                 } else if (this.type === "moon") {
+           // Regular Moon - soft silver glow
+           ctx.shadowColor = "#c0c0c0";
+           ctx.shadowBlur = 8;
+        } else if (this.type === "frozeflake") {
+          // Frozeflake - sky blue glow
+          ctx.shadowColor = "#87ceeb";
+          ctx.shadowBlur = 12;
+        }
+        
+        ctx.fillText(this.emoji, this.x, this.y);
+        ctx.restore();
+      }
+
+      checkCollision(character) {
+        const dx = this.x - character.x;
+        const dy = this.y - character.y;
+        const distance = Math.hypot(dx, dy);
+        return distance < (this.size + character.size);
+      }
+    }
+
+
+
+    // Enhanced Character class with module integration
+    class ArenaCharacter {
+      constructor(emoji, name, x, y, team) {
+        this.emoji = emoji;
+        this.name = name;
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() * 2 - 1) * 2;
+        this.vy = (Math.random() * 2 - 1) * 2;
+        this.angle = 0;
+        this.team = team;
+              // Set HP based on character balance
+      this.maxHp = this.getOptimalHP();
+      this.hp = this.maxHp;
+        this.fakeHp = 0;
+        this.shield = 0;
+        this.size = 16;
+        this.isDead = false;
+        this.frozen = false;
+        this.frozenUntil = 0;
+        this.invulnerable = false;
+        this.invulnerableUntil = 0;
+        this.lastAbilityTime = 0;
+        this.statusEffects = new Map();
+        this.abilityData = {};
+
+              // Initialize character-specific abilities using modules
+      this.initializeAbilities();
+    }
+
+    getOptimalHP() {
+      // Balanced HP values for exciting 1-3 minute battles
+      const hpValues = {
+        // HIGH HP - Low/Moderate damage characters
+        "😈": 120, // Demonlord - Fire + Hell's Trial (medium burst)
+        "👽": 100, // Terestro - Stars + Galactic Overload (moderate)
+        "👾": 110, // Gamemaster - Coins + Game Buster (burst potential)
+        "🤡": 95,  // Mimic - Ball + Balloons (moderate sustain)
+        "🎃": 105, // Tricker - Bat + Blood Suck (moderate control)
+        "👹": 125, // Grinch - Boulders + Healing (high damage + sustain)
+        "👼🏻": 100, // Kael - Blocks + Divine Heal (balanced + sustain)
+        "🤵🏻": 110, // Magico - Cards (moderate + utility)
+        "🐼": 90,  // Black Spot - Low damage + Annoyed Spot burst
+        "🦁": 80,  // Kingstone - Starts weak, scales with Pride
+        "🐰": 115, // Hopper - Distance-based (variable but can be high)
+        
+        // MEDIUM HP - High damage potential
+        "💀": 85,  // Deathblow - High direct damage + skulls
+        "🐺": 130, // Moonhowl - Speed stacking + guaranteed strikes
+        "🐻‍❄️": 95, // Antarticus - Freeze control + execution
+        
+        // LOW HP - Exponential scaling characters  
+        "🐯": 70,  // Clawhard - Life Surge makes him tankier + infinite scaling
+        "🦊": 60   // Frenzy - Lowest HP but highest scaling potential
+      };
+      
+      return hpValues[this.emoji] || 100; // Default fallback
+    }
+
+    initializeAbilities() {
+        // Base initialization
+        this.abilityData = {
+          initialized: true
+        };
+
+        // Initialize character-specific abilities using modules
+        if (window.DemonlordModule) {
+          DemonlordModule.initializeAbilities(this);
+        }
+        if (window.TerestroModule) {
+          TerestroModule.initializeAbilities(this);
+        }
+        if (window.GamemasterModule) {
+          GamemasterModule.initializeAbilities(this);
+        }
+        if (window.DeathblowModule) {
+          DeathblowModule.initializeAbilities(this);
+        }
+        if (window.MimicModule) {
+          MimicModule.initializeAbilities(this);
+        }
+        if (window.TrickerModule) {
+          TrickerModule.initializeAbilities(this);
+        }
+        if (window.GrinchModule) {
+          GrinchModule.initializeAbilities(this);
+        }
+        if (window.KaelModule) {
+          KaelModule.initializeAbilities(this);
+        }
+        if (window.MagicoModule) {
+          MagicoModule.initializeAbilities(this);
+        }
+        if (window.ClawhardModule) {
+          ClawhardModule.initializeAbilities(this);
+        }
+        if (window.KingstoneModule) {
+          KingstoneModule.initializeAbilities(this);
+        }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.initializeAbilities(this);
+        }
+        if (window.AntarticusModule) {
+          AntarticusModule.initializeAbilities(this);
+        }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.initializeAbilities(this);
+        }
+        if (window.FrenzyModule) {
+          FrenzyModule.initializeAbilities(this);
+        }
+        if (window.HopperModule) {
+          HopperModule.initializeAbilities(this);
+        }
+        // Additional character modules will be added here
+      }
+
+      update() {
+        if (this.isDead) return;
+
+        // Handle frozen state
+        // Handle freeze status
+        if (this.isFrozen) {
+          if (gameTime < this.frozenUntil) {
+            // Still frozen - skip movement and abilities
+            this.freezeTime = Math.max(0, this.freezeTime - 1);
+            return;
+          } else {
+            // Freeze expired
+            this.isFrozen = false;
+            this.freezeTime = 0;
+            
+            // Remove visual freeze effect
+            if (this.element) {
+              this.element.classList.remove('frozen');
+            }
+            
+            console.log(`❄️ Character unfrozen`);
+          }
+        }
+
+        // Handle invulnerability
+        if (this.invulnerable && gameTime < this.invulnerableUntil) {
+          // Still invulnerable
+        } else {
+          this.invulnerable = false;
+        }
+
+        // Basic movement
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Wall collision (skip for Hopper - uses custom system)
+        if (!this.hopperOverride) {
+          const r = this.size;
+          if (this.x < r) {
+            this.x = r;
+            this.vx *= -1;
+            this.handleWallCollision('left');
+          } else if (this.x > canvas.width - r) {
+            this.x = canvas.width - r;
+            this.vx *= -1;
+            this.handleWallCollision('right');
+          }
+
+          if (this.y < r) {
+            this.y = r;
+            this.vy *= -1;
+            this.handleWallCollision('top');
+          } else if (this.y > canvas.height - r) {
+            this.y = canvas.height - r;
+            this.vy *= -1;
+            this.handleWallCollision('bottom');
+          }
+        }
+
+        this.angle += 0.05;
+
+        // Handle abilities using modules
+        this.handleAbilities();
+      }
+
+      handleWallCollision(side) {
+        // Character-specific wall collision handling
+        if (window.DeathblowModule) {
+          DeathblowModule.handleWallCollision(this, side);
+        }
+        if (window.TrickerModule) {
+          TrickerModule.handleWallCollision(this, side);
+        }
+      }
+
+      handleAbilities() {
+        // Handle abilities using character modules
+        if (window.DemonlordModule) {
+          DemonlordModule.handleAbilities(this);
+        }
+        if (window.TerestroModule) {
+          TerestroModule.handleAbilities(this);
+        }
+        if (window.GamemasterModule) {
+          GamemasterModule.handleAbilities(this);
+        }
+        if (window.DeathblowModule) {
+          DeathblowModule.handleAbilities(this);
+        }
+        if (window.MimicModule) {
+          MimicModule.handleAbilities(this);
+        }
+        if (window.TrickerModule) {
+          TrickerModule.handleAbilities(this);
+        }
+        if (window.GrinchModule) {
+          GrinchModule.handleAbilities(this);
+        }
+        if (window.KaelModule) {
+          KaelModule.handleAbilities(this);
+        }
+        if (window.MagicoModule) {
+          MagicoModule.handleAbilities(this);
+        }
+        if (window.ClawhardModule) {
+          ClawhardModule.handleAbilities(this);
+        }
+        if (window.KingstoneModule) {
+          KingstoneModule.handleAbilities(this);
+        }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.handleAbilities(this);
+        }
+        if (window.AntarticusModule) {
+          AntarticusModule.handleAbilities(this);
+        }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleAbilities(this);
+        }
+        if (window.FrenzyModule) {
+          FrenzyModule.handleAbilities(this);
+        }
+        if (window.HopperModule) {
+          HopperModule.handleAbilities(this);
+        }
+        // Additional character modules will be called here
+      }
+
+      takeDamage(amount, source = null) {
+        if (this.isDead || this.invulnerable) return false;
+        
+        // Handle character-specific damage tracking
+        if (window.KaelModule) {
+          KaelModule.handleDamageReceived(this, amount);
+        }
+        
+        // Handle Black Spot hit tracking
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleHitReceived(this);
+        }
+        
+        // Apply damage to fake HP first, then real HP
+        if (this.fakeHp > 0) {
+          const fakeReduction = Math.min(this.fakeHp, amount);
+          this.fakeHp -= fakeReduction;
+          amount -= fakeReduction;
+        }
+        
+        if (amount > 0) {
+          this.hp -= amount;
+          if (this.hp <= 0) {
+            this.hp = 0;
+            this.die();
+          }
+        }
+        
+        return true;
+      }
+
+      heal(amount) {
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+      }
+
+      addFakeHp(amount) {
+        this.fakeHp = Math.min(this.maxHp - this.hp, this.fakeHp + amount);
+      }
+
+      freeze(duration) {
+        this.isFrozen = true;
+        this.freezeTime = duration;
+        this.frozenUntil = gameTime + duration;
+        
+        // Add visual freeze effect
+        if (this.element) {
+          this.element.classList.add('frozen');
+        }
+        
+        console.log(`❄️ Character frozen for ${duration/60} seconds`);
+      }
+
+      die() {
+        this.isDead = true;
+        audio.death();
+        
+        // Handle character-specific death effects
+        if (window.DemonlordModule) {
+          DemonlordModule.handleCharacterDeath(this);
+        }
+        if (window.TerestroModule) {
+          TerestroModule.handleCharacterDeath(this);
+        }
+        if (window.GamemasterModule) {
+          GamemasterModule.handleCharacterDeath(this);
+        }
+        if (window.DeathblowModule) {
+          DeathblowModule.handleCharacterDeath(this);
+        }
+        if (window.MimicModule) {
+          MimicModule.handleCharacterDeath(this);
+        }
+        if (window.TrickerModule) {
+          TrickerModule.handleCharacterDeath(this);
+        }
+        if (window.GrinchModule) {
+          GrinchModule.handleCharacterDeath(this);
+        }
+        if (window.KaelModule) {
+          KaelModule.handleCharacterDeath(this);
+        }
+        if (window.MagicoModule) {
+          MagicoModule.handleCharacterDeath(this);
+        }
+        if (window.ClawhardModule) {
+          ClawhardModule.handleCharacterDeath(this);
+        }
+        if (window.KingstoneModule) {
+          KingstoneModule.handleCharacterDeath(this);
+        }
+        if (window.MoonhowlModule) {
+          MoonhowlModule.handleCharacterDeath(this);
+        }
+        if (window.AntarticusModule) {
+          AntarticusModule.handleCharacterDeath(this);
+        }
+        if (window.BlackSpotModule) {
+          BlackSpotModule.handleCharacterDeath(this);
+        }
+        if (window.FrenzyModule) {
+          FrenzyModule.handleCharacterDeath(this);
+        }
+        if (window.HopperModule) {
+          HopperModule.handleCharacterDeath(this);
+        }
+        
+        // Create death animation
+        this.createDeathAnimation();
+        
+        // Check win condition after delay
+        setTimeout(() => {
+          checkWinCondition();
+        }, 5000); // 5 second delay as specified
+      }
+
+      createDeathAnimation() {
+        const rect = canvas.getBoundingClientRect();
+        const deathAnim = document.createElement('div');
+        deathAnim.className = 'death-animation';
+        deathAnim.textContent = this.emoji;
+        deathAnim.style.left = `${rect.left + this.x - 24}px`;
+        deathAnim.style.top = `${rect.top + this.y - 24}px`;
+        document.body.appendChild(deathAnim);
+        
+        setTimeout(() => {
+          deathAnim.remove();
+        }, 2000);
+      }
+
+      draw(ctx) {
+        if (this.isDead) return;
+        
+        ctx.save();
+        
+        // Glow effects for special states
+        if (this.invulnerable) {
+          ctx.shadowColor = "#ffffff";
+          ctx.shadowBlur = 10;
+        }
+        
+        if (this.frozen) {
+          ctx.shadowColor = "#00ffff";
+          ctx.shadowBlur = 8;
+        }
+        
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.font = "32px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        ctx.fillText(this.emoji, 0, 0);
+        
+        ctx.restore();
+      }
+
+      getNearestEnemy() {
+        let nearest = null;
+        let minDistance = Infinity;
+        
+        charactersInArena.forEach(c => {
+          if (c.team !== this.team && !c.isDead) {
+            const distance = Math.hypot(c.x - this.x, c.y - this.y);
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearest = c;
+            }
+          }
+        });
+        
+        return nearest;
+      }
+    }
+  </script>
+
+  <!-- Character Modules - Load after Projectile class is defined -->
+  <script src="demonlord.js"></script>
+  <script src="terestro.js"></script>
+  <script src="gamemaster.js"></script>
+  <script src="deathblow.js"></script>
+  <script src="mimic.js"></script>
+  <script src="tricker.js"></script>
+  <script src="grinch.js"></script>
+  <script src="kael.js"></script>
+  <script src="magico.js"></script>
+  <script src="clawhard.js"></script>
+  <script src="kingstone.js"></script>
+  <script src="moonhowl.js"></script>
+  <script src="antarticus.js"></script>
+  <script src="blackspot.js"></script>
+  <script src="frenzy.js"></script>
+  <script src="hopper.js"></script>
+
+  <script>
+    // Character selection functions
+    function createCharacterGrid(id, team) {
+      const container = document.getElementById(id);
+      container.innerHTML = "";
+      
+      characters.forEach(char => {
+        const btn = document.createElement("button");
+        btn.classList.add("char-btn");
+        btn.textContent = char.emoji;
+        btn.title = char.name;
+        btn.onclick = () => selectCharacter(char, team);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectCharacter(char, team) {
+      if (team === 1) {
+        const index = selectedP1.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP1.splice(index, 1);
+        } else if (selectedP1.length < 5 && !selectedP2.some(c => c.emoji === char.emoji)) {
+          selectedP1.push(char);
+        }
+      } else if (team === 2) {
+        const index = selectedP2.findIndex(c => c.emoji === char.emoji);
+        if (index !== -1) {
+          selectedP2.splice(index, 1);
+        } else if (selectedP2.length < 5 && !selectedP1.some(c => c.emoji === char.emoji)) {
+          selectedP2.push(char);
+        }
+      }
+      
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      // Update counters
+      document.getElementById('p1Count').textContent = selectedP1.length;
+      document.getElementById('p2Count').textContent = selectedP2.length;
+      
+      // Update button highlights
+      document.querySelectorAll(".char-btn").forEach(btn => {
+        btn.classList.remove("selected-p1", "selected-p2");
+        const emoji = btn.textContent;
+        
+        if (selectedP1.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p1");
+        }
+        if (selectedP2.some(c => c.emoji === emoji)) {
+          btn.classList.add("selected-p2");
+        }
+      });
+      
+      // Update start button
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = selectedP1.length === 0 || selectedP2.length === 0;
+    }
+
+    function startGame() {
+      if (selectedP1.length === 0 || selectedP2.length === 0) {
+        return;
+      }
+      
+      // Initialize audio context on user interaction
+      if (audio.audioContext && audio.audioContext.state === 'suspended') {
+        audio.audioContext.resume();
+      }
+      
+      // Hide selection overlay and show arena
+      document.getElementById("characterSelect").style.display = "none";
+      document.getElementById("arenaContainer").style.display = "flex";
+      
+      // Set match info
+      const info = selectedP1.length > 1 || selectedP2.length > 1 ?
+        `Team Battle: ${selectedP1.length} vs ${selectedP2.length}` : 
+        `${selectedP1[0].emoji} VS ${selectedP2[0].emoji}`;
+      document.getElementById("matchInfo").textContent = info;
+      
+      // Create HP displays
+      createHPDisplays();
+      
+      // Initialize canvas
+      canvas = document.getElementById("arena");
+      canvas.width = Math.min(window.innerWidth * 0.9, 1000);
+      canvas.height = Math.min(window.innerHeight * 0.6, 600);
+      ctx = canvas.getContext("2d");
+      
+      // Create characters
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      // Position team 1
+      const gapX1 = canvas.width / (selectedP1.length + 1);
+      selectedP1.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX1 * (i + 1), canvas.height * 0.2, 1
+        ));
+      });
+      
+      // Position team 2
+      const gapX2 = canvas.width / (selectedP2.length + 1);
+      selectedP2.forEach((char, i) => {
+        charactersInArena.push(new ArenaCharacter(
+          char.emoji, char.name,
+          gapX2 * (i + 1), canvas.height * 0.8, 2
+        ));
+      });
+      
+      gameRunning = true;
+      requestAnimationFrame(gameLoop);
+    }
+
+    function createHPDisplays() {
+      const hp1 = document.getElementById("player1HP");
+      const hp2 = document.getElementById("player2HP");
+      
+      // Clear existing content except headers
+      hp1.innerHTML = '<div class="team-header">🟢 Player 1</div>';
+      hp2.innerHTML = '<div class="team-header">🔵 Player 2</div>';
+      
+      selectedP1.forEach(char => {
+        const div = document.createElement('div');
+        div.className = 'hp-container';
+        div.innerHTML = `
+          <div class="hp-bar-wrapper">
+            <div class="character-icon">${char.emoji}</div>
+            <div class="hp-bar">
+              <div class="current-hp"></div>
+              <div class="fakehp"></div>
+              <div class="shield"></div>
+            </div>
+            <div class="hp-text">100</div>
+          </div>
+        `;
+        hp1.appendChild(div);
+      });
+      
+      selectedP2.forEach(char => {
+        const div = document.createElement('div');
+        div.className = 'hp-container';
+        div.innerHTML = `
+          <div class="hp-bar-wrapper">
+            <div class="character-icon">${char.emoji}</div>
+            <div class="hp-bar">
+              <div class="current-hp"></div>
+              <div class="fakehp"></div>
+              <div class="shield"></div>
+            </div>
+            <div class="hp-text">100</div>
+          </div>
+        `;
+        hp2.appendChild(div);
+      });
+    }
+
+    function updateHPDisplays() {
+      const hp1Elements = document.querySelectorAll("#player1HP .hp-container");
+      const hp2Elements = document.querySelectorAll("#player2HP .hp-container");
+      
+      selectedP1.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 1);
+        if (character && hp1Elements[i]) {
+          updateCharacterStatus(hp1Elements[i], character);
+        }
+      });
+      
+      selectedP2.forEach((char, i) => {
+        const character = charactersInArena.find(c => c.emoji === char.emoji && c.team === 2);
+        if (character && hp2Elements[i]) {
+          updateCharacterStatus(hp2Elements[i], character);
+        }
+      });
+    }
+
+    function updateCharacterStatus(element, character) {
+      const currentHp = element.querySelector('.current-hp');
+      const fakeHp = element.querySelector('.fakehp');
+      const shield = element.querySelector('.shield');
+      const hpText = element.querySelector('.hp-text');
+      
+      const hpPercentage = (character.hp / character.maxHp) * 100;
+      const fakePercentage = (character.fakeHp / character.maxHp) * 100;
+      const shieldPercentage = (character.shield / character.maxHp) * 100;
+      
+      currentHp.style.width = `${hpPercentage}%`;
+      fakeHp.style.width = `${fakePercentage}%`;
+      shield.style.width = `${shieldPercentage}%`;
+      hpText.textContent = Math.ceil(character.hp);
+      
+      if (character.isDead) {
+        element.style.opacity = '0.3';
+      }
+    }
+
+    // Projectile hit handling
+    function handleProjectileHit(projectile, character) {
+      if (character.isDead || character.invulnerable) return;
+      if (character === projectile.owner && !projectile.canHitOwner) return;
+      
+      // Check for Mimic immunity during mimicry
+      if (window.MimicModule && MimicModule.handleProjectileVsMimic(projectile, character)) {
+        return; // Projectile passes through mimicking Mimic
+      }
+      
+      // Handle fire projectiles
+      if (projectile.type === "fire" && window.DemonlordModule) {
+        DemonlordModule.handleFireHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Handle star projectiles
+      if (projectile.type === "star" && window.TerestroModule) {
+        TerestroModule.handleStarHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Handle coin projectiles
+      if (projectile.type === "coin" && window.GamemasterModule) {
+        GamemasterModule.handleCoinHit(projectile, character);
+        
+        // Remove the projectile after hit
+        const index = projectiles.indexOf(projectile);
+        if (index > -1) {
+          projectiles.splice(index, 1);
+        }
+        return;
+      }
+      
+      // Handle bank projectiles
+      if (projectile.type === "bank" && window.GamemasterModule) {
+        GamemasterModule.handleBankHit(projectile, character);
+        return; // Banks are removed within the handler if collected
+      }
+      
+      // Handle dangerskull projectiles
+      if (projectile.type === "dangerskull" && window.DeathblowModule) {
+        DeathblowModule.handleDangerskullHit(projectile, character);
+        return; // Dangerskulls are removed within the handler
+      }
+      
+      // Handle red ball projectiles
+      if (projectile.type === "redball" && window.MimicModule) {
+        MimicModule.handleRedBallHit(projectile, character);
+        return; // Red ball continues bouncing unless 10th hit
+      }
+      
+      // Handle balloon projectiles
+      if (projectile.type === "balloon" && window.MimicModule) {
+        MimicModule.handleBalloonHit(projectile, character);
+        return; // Balloons pop on hit
+      }
+      
+      // Handle bat projectiles
+      if (projectile.type === "bat" && window.TrickerModule) {
+        TrickerModule.handleBatHit(projectile, character);
+        return; // Bat continues bouncing
+      }
+      
+      // Handle boulder projectiles (giant boulder, boulder, rock)
+      if ((projectile.type === "giantboulder" || projectile.type === "boulder" || projectile.type === "rock") && window.GrinchModule) {
+        GrinchModule.handleBoulderHit(projectile, character);
+        return; // Boulders are removed or split within handler
+      }
+      
+      // Handle block projectiles (black and white blocks)
+      if ((projectile.type === "blackblock" || projectile.type === "whiteblock") && window.KaelModule) {
+        KaelModule.handleBlockHit(projectile, character);
+        return; // Blocks are removed within handler
+      }
+      
+      // Handle card projectiles
+      if (projectile.type === "card" && window.MagicoModule) {
+        MagicoModule.handleCardHit(projectile, character);
+        return; // Cards are removed within handler
+      }
+      
+      // Handle windslash projectiles
+      if (projectile.type === "windslash" && window.ClawhardModule) {
+        ClawhardModule.handleWindslashHit(projectile, character);
+        return; // Windslashes are removed within handler
+      }
+      
+      // Handle Leo projectiles
+      if (projectile.type === "leo" && window.KingstoneModule) {
+        KingstoneModule.handleLeoHit(projectile, character);
+        return; // Leo evolution handled within module
+      }
+      
+      // Handle moon projectiles
+      if (projectile.type === "moon" && window.MoonhowlModule) {
+        MoonhowlModule.handleMoonHit(projectile, character);
+        return; // Moons are removed within handler
+      }
+      
+      // Handle Full Moon projectiles
+      if (projectile.type === "fullmoon" && window.MoonhowlModule) {
+        MoonhowlModule.handleFullMoonHit(projectile, character);
+        return; // Full Moons are removed within handler
+      }
+      
+      // Handle Frozeflake projectiles
+      if (projectile.type === "frozeflake" && window.AntarticusModule) {
+        AntarticusModule.handleFrozeflakeHit(projectile, character);
+        return; // Frozeflakes are removed within handler
+      }
+      
+      // Default projectile hit
+      character.takeDamage(projectile.damage, projectile.owner);
+      audio.hit();
+    }
+
+    // Collision detection
+    function handleCharacterCollisions() {
+      const CHARACTER_RADIUS = 16;
+      const MIN_DISTANCE = CHARACTER_RADIUS * 2;
+      const BUMP_FORCE = 0.5;
+      
+      for (let i = 0; i < charactersInArena.length; i++) {
+        for (let j = i + 1; j < charactersInArena.length; j++) {
+          const a = charactersInArena[i];
+          const b = charactersInArena[j];
+          
+          if (a.isDead || b.isDead) continue;
+          
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distance = Math.hypot(dx, dy);
+          
+          if (distance < MIN_DISTANCE) {
+            const angle = Math.atan2(dy, dx);
+            const overlap = MIN_DISTANCE - distance;
+            
+            // Push apart
+            const pushX = Math.cos(angle) * (overlap / 2);
+            const pushY = Math.sin(angle) * (overlap / 2);
+            a.x += pushX;
+            a.y += pushY;
+            b.x -= pushX;
+            b.y -= pushY;
+            
+            // Clamp positions
+            a.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, a.x));
+            a.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, a.y));
+            b.x = Math.max(CHARACTER_RADIUS, Math.min(canvas.width - CHARACTER_RADIUS, b.x));
+            b.y = Math.max(CHARACTER_RADIUS, Math.min(canvas.height - CHARACTER_RADIUS, b.y));
+            
+            // Apply bump force
+            a.vx = (a.vx + Math.cos(angle) * BUMP_FORCE) * 0.8;
+            a.vy = (a.vy + Math.sin(angle) * BUMP_FORCE) * 0.8;
+            b.vx = (b.vx - Math.cos(angle) * BUMP_FORCE) * 0.8;
+            b.vy = (b.vy - Math.sin(angle) * BUMP_FORCE) * 0.8;
+            
+            // Handle collision-based abilities
+            if (a.team !== b.team) {
+              handleCharacterHit(a, b);
+              handleCharacterHit(b, a);
+            }
+          }
+        }
+      }
+    }
+
+    function handleCharacterHit(attacker, victim) {
+      // Handle character-specific collision damage
+      if (attacker.emoji === "💀" && window.DeathblowModule) {
+        DeathblowModule.handleEnemyHit(attacker, victim);
+      } else if (attacker.emoji === "🦁" && window.KingstoneModule) {
+        // Handle Kingstone direct hits
+        if (attacker.abilityData && attacker.abilityData.isPrideLeader) {
+          const handled = KingstoneModule.handleDirectHit(attacker, victim);
+          if (!handled) {
+            // Fallback to basic damage if hit was on cooldown
+            victim.takeDamage(1, attacker);
+            audio.hit();
+          }
+        } else if (attacker.abilityData && !attacker.abilityData.isPrideLeader) {
+          // Handle Pride member hits
+          const handled = KingstoneModule.handlePrideMemberHit(attacker, victim);
+          if (!handled) {
+            // Fallback to basic damage if hit was on cooldown
+            victim.takeDamage(1, attacker);
+            audio.hit();
+          }
+                   } else {
+             // Basic collision damage for other lions
+             victim.takeDamage(1, attacker);
+             audio.hit();
+           }
+                 } else if (victim.emoji === "🐺" && window.MoonhowlModule) {
+           // Handle Wolfsense removal when Moonhowl is hit
+           MoonhowlModule.handleWolfsenseRemoval(victim);
+           // Basic collision damage
+           victim.takeDamage(1, attacker);
+           audio.hit();
+                 } else if (attacker.emoji === "🐻‍❄️" && window.AntarticusModule) {
+            // Handle Antarticus direct hits (only when enemy is frozen)
+            const handled = AntarticusModule.handleDirectHit(attacker, victim);
+            if (!handled) {
+              // No direct hit damage if enemy not frozen
+              // Don't deal basic collision damage either
+            }
+                 } else if (attacker.emoji === "🐼" && window.BlackSpotModule) {
+             // Handle Black Spot direct hits
+             const handled = BlackSpotModule.handleDirectHit(attacker, victim);
+             if (!handled) {
+               // Fallback to basic damage if hit was on cooldown
+               victim.takeDamage(1, attacker);
+               audio.hit();
+             }
+        } else if (attacker.emoji === "🦊" && window.FrenzyModule) {
+             // Handle Frenzy direct hits with speed stacking
+             const handled = FrenzyModule.handleDirectHit(attacker, victim);
+             if (!handled) {
+               // Fallback to basic damage if hit was on cooldown
+               victim.takeDamage(1, attacker);
+               audio.hit();
+             }
+        } else {
+          // Basic collision damage for other characters
+          victim.takeDamage(1, attacker);
+          audio.hit();
+        }
+    }
+
+    // Game loop
+    const MAX_SPEED = 3;
+    const FRICTION = 0.98;
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      
+      gameTime++;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Apply Hell's Trial damage
+      if (window.DemonlordModule) {
+        DemonlordModule.applyHellsTrialDamage();
+      }
+      
+      // Update and draw characters
+      charactersInArena.forEach(c => {
+        if (!c.isDead) {
+          // Apply friction
+          c.vx *= FRICTION;
+          c.vy *= FRICTION;
+          
+          // Cap speed
+          const speed = Math.hypot(c.vx, c.vy);
+          if (speed > MAX_SPEED) {
+            const angle = Math.atan2(c.vy, c.vx);
+            c.vx = Math.cos(angle) * MAX_SPEED;
+            c.vy = Math.sin(angle) * MAX_SPEED;
+          }
+          
+          c.update();
+          
+          // Check leaf consumption for Black Spot
+          if (window.BlackSpotModule) {
+            BlackSpotModule.checkLeafConsumption(c);
+          }
+          
+          c.draw(ctx);
+          
+          // Draw character-specific overlays
+          if (window.TrickerModule) {
+            TrickerModule.drawWebs(ctx, c);
+            TrickerModule.drawClone(ctx, c);
+          }
+          if (window.GrinchModule) {
+            GrinchModule.drawBloodDrops(ctx, c);
+          }
+        }
+      });
+      
+      // Update and draw projectiles
+      projectiles = projectiles.filter(p => {
+        if (!p.update()) return false;
+        
+        // Check collision with characters
+        charactersInArena.forEach(char => {
+          if (p.checkCollision(char)) {
+            handleProjectileHit(p, char);
+          }
+        });
+        
+        p.draw(ctx);
+        return true;
+      });
+      
+      // Handle character collisions
+      handleCharacterCollisions();
+      
+      // Update HP displays
+      updateHPDisplays();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function checkWinCondition() {
+      const team1Alive = charactersInArena.filter(c => c.team === 1 && !c.isDead);
+      const team2Alive = charactersInArena.filter(c => c.team === 2 && !c.isDead);
+      
+      if (team1Alive.length === 0 || team2Alive.length === 0) {
+        gameRunning = false;
+        
+        const winner = team1Alive.length > 0 ? "🟢 Player 1" : "🔵 Player 2";
+        document.getElementById("winnerText").textContent = `${winner} Wins!`;
+        document.getElementById("gameOver").classList.add("show");
+      }
+    }
+
+    function resetGame() {
+      gameRunning = false;
+      charactersInArena = [];
+      projectiles = [];
+      gameTime = 0;
+      
+      // Reset arena visual effects
+      const canvas = document.getElementById('arena');
+      canvas.classList.remove('hell-trial');
+      
+      document.getElementById('gameOver').classList.remove('show');
+      document.getElementById('characterSelect').style.display = 'flex';
+      document.getElementById('arenaContainer').style.display = 'none';
+      
+      selectedP1 = [];
+      selectedP2 = [];
+      updateDisplay();
+    }
+  </script>
+
+  <!-- Character Modules - Load after all classes are defined -->
+  <script>
+    // Initialize the game
+    createCharacterGrid("player1Chars", 1);
+    createCharacterGrid("player2Chars", 2);
+    updateDisplay();
+  </script>
+</body>
+</html>
